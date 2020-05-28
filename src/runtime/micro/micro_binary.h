@@ -35,25 +35,26 @@ class MicroBinary : public ObjectRef {
   explicit MicroBinary(ObjectRef<Object> n) : ObjectRef(n) {}
 
   /*!
-   * \brief Get packed function from current module by name.
+   * \brief Get member function for use by frontend.
    *
    * \param name The name of the function.
-   * \param query_imports Whether also query dependency modules.
    * \return The result function.
    *  This function will return PackedFunc(nullptr) if function do not exist.
-   * \note Implemented in packed_func.cc
    */
-  inline PackedFunc GetFunction(const std::string& name, bool query_imports = false);
-
+  inline PackedFunc GetFunction(const std::string& name);
 
   using ContainerType = MicroBinaryNode;
   friend class MicroBinaryNode;
 };
 
 
-
 class MicroBinaryNode : public Object {
+ public:
+  /*! \brief The binary file, encoded as ELF. */
+  std::string elf_data;
 
+  /*! \brief The names of callable tasks in this binary. */
+  std::vector<string> task_names;
 };
 
 }  // namespace runtime

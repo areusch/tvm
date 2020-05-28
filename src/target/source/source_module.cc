@@ -67,8 +67,11 @@ runtime::Module SourceModuleCreate(std::string code, std::string fmt) {
 // Simulator function
 class CSourceModuleNode : public runtime::ModuleNode {
  public:
-  CSourceModuleNode(std::string code, std::string fmt) : code_(code), fmt_(fmt) {}
-  const char* type_key() const { return "c"; }
+  CSourceModuleNode(std::string code, std::string fmt, Target target) :
+      code_{code}, fmt_{fmt}, target_{target} {}
+  const char* type_key() const {
+    return target_.is_micro_runtime() ? "micro-c" : "c";
+  }
 
   PackedFunc GetFunction(const std::string& name, const ObjectPtr<Object>& sptr_to_self) final {
     LOG(FATAL) << "C Source module cannot execute, to get executable module"
@@ -92,10 +95,11 @@ class CSourceModuleNode : public runtime::ModuleNode {
  protected:
   std::string code_;
   std::string fmt_;
+  std::string target_;
 };
 
-runtime::Module CSourceModuleCreate(std::string code, std::string fmt) {
-  auto n = make_object<CSourceModuleNode>(code, fmt);
+runtime::Module CSourceModuleCreate(std::string code, std::string fmt, Target target) {
+  auto n = make_object<CSourceModuleNode>(code, fmt, target);
   return runtime::Module(n);
 }
 

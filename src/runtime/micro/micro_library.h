@@ -45,15 +45,17 @@ class MicroLibrary : public ObjectRef {
    */
   inline PackedFunc GetFunction(const std::string& name, bool query_imports = false);
 
-
   using ContainerType = MicroLibraryNode;
   friend class MicroLibraryNode;
 };
 
-
-
 class MicroLibraryNode : public Object {
+ public:
+  /*! \brief The library file, encoded as ELF. */
+  std::string elf_data;
 
+  /*! \brief The names of callable tasks in this library. */
+  std::vector<string> task_names;
 };
 
 }  // namespace runtime

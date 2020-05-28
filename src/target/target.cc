@@ -84,9 +84,12 @@ Target CreateTarget(const std::string& target_name, const std::vector<std::strin
   }
   t->device_type = kDLCPU;
   t->thread_warp_size = 1;
-  if (target_name == "c" && t->device_name == "micro_dev") {
-    t->device_type = kDLMicroDev;
-  } else if (target_name == "c" || target_name == "llvm") {
+//  if (t->is_micro_runtime()) {
+    // TODO(areusch): we set this here to mean "when autotuning, load onto a micro_dev context."
+    // It may be that micro-runtime grows to include other contexts--in which case, we need to define
+    // a context to mean "RPC child context with sp
+//    t->device_type = kDLMicroDev;
+  if (target_name == "c" || target_name == "llvm") {
     t->keys_array.push_back("cpu");
   } else if (target_name == "cuda" || target_name == "nvptx") {
     t->device_type = kDLGPU;
@@ -184,6 +187,10 @@ std::unordered_set<std::string> TargetNode::libs() const {
     result.insert(expr);
   }
   return result;
+}
+
+bool TargetNode::is_micro_runtime() const {
+  return keys_array.find("micro-runtime") != keys_array.end();
 }
 
 const std::string& TargetNode::str() const {

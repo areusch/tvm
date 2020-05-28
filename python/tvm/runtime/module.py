@@ -271,6 +271,7 @@ class Module(object):
         # Extra dependencies during runtime.
         from pathlib import Path
         from tvm.contrib import cc as _cc, tar as _tar, util as _util
+        from tvm.micro import micro_library as _micro_library
 
         if isinstance(file_name, Path):
             file_name = str(file_name)
@@ -287,6 +288,7 @@ class Module(object):
         files = addons if addons else []
         is_system_lib = False
         has_c_module = False
+        has_micro_c_module = False
         llvm_target_triple = None
         for index, module in enumerate(modules):
             if fcompile is not None and hasattr(fcompile, "object_format"):
@@ -294,6 +296,9 @@ class Module(object):
             else:
                 if module.type_key == "llvm":
                     object_format = "o"
+                elif module.type_key == "micro-c":
+                    object_format = "cc"
+                    has_micro_c_module = True
                 else:
                     assert module.type_key == "c"
                     object_format = "cc"
@@ -306,6 +311,9 @@ class Module(object):
             llvm_target_triple = (module.type_key == "llvm" and
                                   module.get_function("_get_target_triple")())
         if not fcompile:
+            if has_micro_c_module:
+                assert not has_c_module
+                fcompile = _micro_library.create_micro_library()
             if file_name.endswith(".tar"):
                 fcompile = _tar.tar
             else:

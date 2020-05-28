@@ -82,6 +82,9 @@ class TargetNode : public Object {
   /*! \brief Get the keys for this target as an unordered_set of string */
   TVM_DLL std::unordered_set<std::string> libs() const;
 
+  /*! \brief Return true if the micro runtime is targeted */
+  TVM_DLL bool is_micro_runtime() const;
+
   static constexpr const char* _type_key = "Target";
   TVM_DECLARE_FINAL_OBJECT_INFO(TargetNode, Object);
 
