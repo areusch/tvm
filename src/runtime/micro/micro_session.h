@@ -53,10 +53,17 @@ namespace runtime {
 
 struct DevTask;
 
+class MicroSession : public ObjectRef {
+
+};
+
 /*!
- * \brief session for facilitating micro device interaction
+ * \brief Supervisor for a single micro_dev target.
+ *
+ * This class is responsible for device reset, programming, and establishing RPC connections
+ * to the runtime executing on-device.
  */
-class MicroSession : public ModuleNode {
+class MicroSessionNode : public Object {
  public:
   /*!
    * \brief Get member function to front-end
@@ -66,55 +73,29 @@ class MicroSession : public ModuleNode {
    */
   virtual PackedFunc GetFunction(const std::string& name, const ObjectPtr<Object>& sptr_to_self);
 
-  // todo having this decoupled from the value in utvm_runtime.c gives me stress dreams
-  static const size_t kTaskQueueCapacity = 20;
-
-  /*!
-   * \return The type key of the executor.
-   */
-  const char* type_key() const final { return "MicroSession"; }
-
-  /*!
-   * \brief creates session by setting up a low-level device and initting allocators for it
-   * \param comms_method method of communication with the device (e.g., "openocd")
-   * \param binary_path file system path to the runtime binary
-   * \param toolchain_prefix GCC toolchain prefix
-   * \param text_start text section start address
-   * \param text_size text section size
-   * \param rodata_start text section start address
-   * \param rodata_size rodata section size
-   * \param data_start data section start address
-   * \param data_size data section size
-   * \param bss_start bss section start address
-   * \param bss_size bss section size
-   * \param args_start args section start address
-   * \param args_size args section size
-   * \param heap_start heap section start address
-   * \param heap_size heap section size
-   * \param workspace_start workspace section start address
-   * \param workspace_size workspace section size
-   * \param stack_start stack section start address
-   * \param stack_size stack section size
-   * \param word_size_bytes number of bytes in a word on the target device
-   * \param thumb_mode whether the target device requires a thumb-mode bit on function addresses
-   * \param server_addr address of the OpenOCD server to connect to (if `comms_method == "openocd"`)
-   * \param port port of the OpenOCD server to connect to (if `comms_method == "openocd"`)
-   */
-  MicroSession(const std::string& comms_method, const std::string& binary_path,
-               const std::string& toolchain_prefix, uint64_t text_start, size_t text_size,
-               uint64_t rodata_start, size_t rodata_size, uint64_t data_start, size_t data_size,
-               uint64_t bss_start, size_t bss_size, uint64_t args_start, size_t args_size,
-               uint64_t heap_start, size_t heap_size, uint64_t workspace_start,
-               size_t workspace_size, uint64_t stack_start, size_t stack_size,
-               TargetWordSize word_size, bool thumb_mode, bool use_device_timer,
-               const std::string& server_addr, int port, PackedFunc debug_func);
-
-  /*!
-   * \brief destructor
-   */
-  ~MicroSession();
+  virtual ~MicroSessionNode() {}
 
   static ObjectPtr<MicroSession>& Current();
+
+  /*!
+   * \brief Load MicroBinary onto the target, execute it, and connect to the runtime.
+   * Call this function to initialize a new
+   */
+  RPCSession RPCConnect(std::string binary);
+
+  /*!
+   * \brief Load MicroBinary onto the target, execute it, and connect to the runtime.
+   * Call this function to initialize a new
+   */
+  RPCSession RPCConnect(std::string binary);
+
+ protected:
+  virtual RPCChannel InternalLoadBinary(std::string binary) = 0;
+
+ private:
+  std::shared_ptr<RPCSession> active_session_;
+};
+
 
   /*!
    * \brief sets up runtime metadata for `func` and copies arguments for on-device execution

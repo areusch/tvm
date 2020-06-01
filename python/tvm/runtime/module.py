@@ -313,8 +313,8 @@ class Module(object):
         if not fcompile:
             if has_micro_c_module:
                 assert not has_c_module
-                fcompile = _micro_library.create_micro_library()
-            if file_name.endswith(".tar"):
+                fcompile = _micro_library.create_micro_library
+            elif file_name.endswith(".tar"):
                 fcompile = _tar.tar
             else:
                 fcompile = _cc.create_shared

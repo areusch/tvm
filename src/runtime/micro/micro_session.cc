@@ -595,21 +595,14 @@ void MicroSession::DevSymbolWrite(const SymbolMap& symbol_map, const std::string
 
 PackedFunc MicroSession::GetFunction(const std::string& name,
                                      const ObjectPtr<Object>& sptr_to_self) {
-  if (name == "enter") {
-    return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
-      MicroSession::EnterWithScope(GetObjectPtr<MicroSession>(this));
+  if (name == "rpc_connect") {
+    return PackedFunc([sptr_to_self](TVMArgs args, TVMRetValue* rv) {
+        GetObjectPtr<MicroSession>(sptr_to_self)->RPCConnect(args[0], args[1]);
     });
-  } else if (name == "exit") {
-    return PackedFunc(
-        [sptr_to_self](TVMArgs args, TVMRetValue* rv) { MicroSession::ExitWithScope(); });
-    // TODO(weberlo): add a `clear_batch_timer` func
-  } else if (name == "get_last_batch_time") {
-    return PackedFunc(
-        [sptr_to_self, this](TVMArgs args, TVMRetValue* rv) { *rv = this->GetLastBatchTime(); });
-    // TODO(weberlo): remove this func
-  } else if (name == "get_last_batch_cycles") {
-    return PackedFunc(
-        [sptr_to_self, this](TVMArgs args, TVMRetValue* rv) { *rv = this->GetLastBatchCycles(); });
+  } else if (name == "rpc_disconnect") {
+    return PackedFunc([sptr_to_self](TVMArgs args, TVMRetValue* rv) {
+        GetObjectPtr<MicroSession>(sptr_to_self)->RPCDisconnect();
+    });
   } else {
     return PackedFunc();
   }
@@ -649,36 +642,7 @@ TVM_REGISTER_GLOBAL("micro._GetMicroTimeEvaluator").set_body([](TVMArgs args, TV
 
 // create micro session and low-level device from Python frontend
 TVM_REGISTER_GLOBAL("micro._CreateSession").set_body([](TVMArgs args, TVMRetValue* rv) {
-  const std::string& comms_method = args[0];
-  const std::string& binary_path = args[1];
-  const std::string& toolchain_prefix = args[2];
-  uint64_t text_start = args[3];
-  size_t text_size = uint64_t(args[4]);
-  uint64_t rodata_start = args[5];
-  size_t rodata_size = uint64_t(args[6]);
-  uint64_t data_start = args[7];
-  size_t data_size = uint64_t(args[8]);
-  uint64_t bss_start = args[9];
-  size_t bss_size = uint64_t(args[10]);
-  uint64_t args_start = args[11];
-  size_t args_size = uint64_t(args[12]);
-  uint64_t heap_start = args[13];
-  size_t heap_size = uint64_t(args[14]);
-  uint64_t workspace_start = args[15];
-  size_t workspace_size = uint64_t(args[16]);
-  uint64_t stack_start = args[17];
-  size_t stack_size = uint64_t(args[18]);
-  TargetWordSize word_size{uint64_t(args[19])};
-  bool thumb_mode = args[20];
-  bool use_device_timer = args[21];
-  const std::string& server_addr = args[22];
-  int port = args[23];
-  PackedFunc debug_func = args[24];
-  ObjectPtr<MicroSession> session = make_object<MicroSession>(
-      comms_method, binary_path, toolchain_prefix, text_start, text_size, rodata_start, rodata_size,
-      data_start, data_size, bss_start, bss_size, args_start, args_size, heap_start, heap_size,
-      workspace_start, workspace_size, stack_start, stack_size, word_size, thumb_mode,
-      use_device_timer, server_addr, port, debug_func);
+  ObjectPtr<MicroSession> session = make_object<MicroSession>();
   *rv = Module(session);
 });
 
