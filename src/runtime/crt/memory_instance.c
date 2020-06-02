@@ -27,6 +27,7 @@
 
 #include "crt_config.h"
 #include <inttypes.h>
+#include <tvm/runtime/crt/memory.h>
 
 /*! \brief Translate log memory size into bytes */
 #define TVM_CRT_VIRT_MEM_SIZE ((1 << TVM_CRT_PAGE_BITS) * TVM_CRT_MAX_PAGES)
@@ -35,3 +36,7 @@
  * \brief Memory pool for virtual dynamic memory allocation
  */
 static uint8_t g_memory_pool[TVM_CRT_VIRT_MEM_SIZE];
+
+MemoryManager* InstantiateGlobalMemoryManger(void) {
+  return MemoryManagerCreate(g_memory_pool, TVM_CRT_VIRT_MEM_SIZE, TVM_CRT_PAGE_BITS);
+}

@@ -24,7 +24,11 @@
 
 #include "ndarray.h"
 
+#include <stdio.h>
 #include <tvm/runtime/crt/memory.h>
+
+
+#include "crt_config.h"
 
 TVMNDArray TVMNDArray_Create(uint32_t ndim, const tvm_index_t* shape, DLDataType dtype,
                              DLContext ctx) {
@@ -44,7 +48,7 @@ TVMNDArray TVMNDArray_Empty(uint32_t ndim, const tvm_index_t* shape, DLDataType 
   TVMNDArray ret = TVMNDArray_Create(ndim, shape, dtype, ctx);
   int64_t num_elems = 1;
   int elem_bytes = (dtype.bits + 7) / 8;
-  uint32_t idx;
+  int idx;
   for (idx = 0; idx < ret.dl_tensor.ndim; ++idx) {
     num_elems *= shape[idx];
   }
@@ -73,8 +77,8 @@ int TVMNDArray_Load(TVMNDArray* ret, const char** strm) {
   *strm += sizeof(ndim);
   dtype = ((DLDataType*)*strm)[0];  // NOLINT(*)
   *strm += sizeof(dtype);
-  if ((ndim < 0) || (ndim > TVM_CRT_MAX_NDIM)) {
-    fprintf(stderr, "Invalid ndim=%d: expected to be 0 ~ %d.\n", ndim, TVM_CRT_MAX_NDIM);
+  if (ndim > TVM_CRT_MAX_NDIM) {
+    fprintf(stderr, "Invalid ndim=%" PRIu32 ": expected to be 0 ~ %d.\n", ndim, TVM_CRT_MAX_NDIM);
     status = -1;
   }
   if (ctx.device_type != kDLCPU) {
@@ -92,7 +96,7 @@ int TVMNDArray_Load(TVMNDArray* ret, const char** strm) {
   *ret = TVMNDArray_Empty(ndim, shape, dtype, ctx);
   int64_t num_elems = 1;
   int elem_bytes = (ret->dl_tensor.dtype.bits + 7) / 8;
-  for (idx = 0; idx < ret->dl_tensor.ndim; ++idx) {
+  for (idx = 0; idx < (uint32_t) ret->dl_tensor.ndim; ++idx) {
     num_elems *= ret->dl_tensor.shape[idx];
   }
   int64_t data_byte_size;

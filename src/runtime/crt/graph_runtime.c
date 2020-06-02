@@ -36,13 +36,22 @@
 #endif  // MAX
 
 static uint32_t ReadUint32(JSONReader* reader) {
-  uint64_t x;
+  unsigned long x;
   reader->ReadUnsignedInteger(reader, &x);
-  if (x >= (((uint64_t) 1) << 32)) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtype-limits"
+  if (((uint64_t) x) >= (((uint64_t) 1) << 32)) {
+#pragma GCC diagnostic pop
     TVMPlatformAbort(-1);
   }
 
   return (uint32_t) x;
+}
+
+static int64_t ReadInt64(JSONReader* reader) {
+  long x;
+  reader->ReadInteger(reader, &x);
+  return (int64_t) x;
 }
 
 uint32_t Shape_Accumulate(int64_t* shape, uint32_t ndim) {
@@ -296,12 +305,12 @@ int TVMGraphRuntimeGraphAttr_Load(TVMGraphRuntimeGraphAttr* attr, JSONReader* re
         attr->ndim = vrealloc(attr->ndim, sizeof(attr->ndim[0]) * (shape_count + 1));
         reader->BeginArray(reader);
         int64_t* attr_shape_ptr = attr->shape + shape_count * TVM_CRT_MAX_NDIM;
-        reader->ReadInteger(reader, attr_shape_ptr + 0);
+        *attr_shape_ptr = ReadInt64(reader);
         uint32_t ndim = 1;
         if (reader->NextArrayItem(reader)) {
           for (ndim = 1; ndim < TVM_CRT_MAX_NDIM; ndim++) {
             if (reader->NextArrayItem(reader)) {
-              reader->ReadInteger(reader, attr_shape_ptr + ndim);
+              attr_shape_ptr[ndim] = ReadInt64(reader);
             } else {
               break;
             }

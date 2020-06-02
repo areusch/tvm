@@ -25,6 +25,9 @@
 #ifndef TVM_RUNTIME_CRT_MEMORY_H_
 #define TVM_RUNTIME_CRT_MEMORY_H_
 
+#include <inttypes.h>
+#include <stdlib.h>
+
 /*!
  * \brief Allocate memory from manager
  * \param size The size of memory
@@ -50,8 +53,10 @@ void vfree(void* ptr);
 /*! \brief Physical address type */
 typedef uintptr_t tvm_phy_addr_t;
 
-struct MemoryManager;
+typedef struct MemoryManager MemoryManager;
 
-struct MemoryManager* TVMGetGlobalMemoryManager(void);
+MemoryManager* MemoryManagerCreate(uint8_t* memory_pool,
+                                   size_t memory_pool_size_bytes,
+                                   size_t page_size_bytes_log2);
 
 #endif  // TVM_RUNTIME_CRT_MEMORY_H_

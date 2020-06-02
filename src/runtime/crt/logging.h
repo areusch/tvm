@@ -26,12 +26,14 @@
 #ifndef TVM_RUNTIME_CRT_LOGGING_H_
 #define TVM_RUNTIME_CRT_LOGGING_H_
 
+#include <tvm/runtime/crt/platform.h>
+
 #ifndef CHECK
 #define CHECK(x)                                 \
   do {                                           \
     if (!(x)) {                                  \
       fprintf(stderr, "Check failed: %s\n", #x); \
-      exit(-1);                                  \
+      TVMPlatformAbort(-1);                      \
     }                                            \
   } while (0)
 #endif

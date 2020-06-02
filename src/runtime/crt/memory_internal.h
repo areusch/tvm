@@ -24,7 +24,11 @@
 #ifndef TVM_RUNTIME_CRT_MEMORY_INTERNAL_H_
 #define TVM_RUNTIME_CRT_MEMORY_INTERNAL_H_
 
+#include <tvm/runtime/crt/memory.h>
+
 /*! \brief number of live memory allocations, for leak checking. */
 int vleak_size = 0;
+
+MemoryManager* TVMGetGlobalMemoryManager(void);
 
 #endif  // TVM_RUNTIME_CRT_MEMORY_INTERNAL_H_
