@@ -25,6 +25,7 @@
 #define TVM_RUNTIME_CRT_LOAD_JSON_H_
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdio.h>
 
 enum {
@@ -72,8 +73,10 @@ typedef struct JSONReader {
   char (*NextNonSpace)(struct JSONReader* reader);
   char (*PeekNextChar)(struct JSONReader* reader);
   char (*PeekNextNonSpace)(struct JSONReader* reader);
-  int (*ReadUnsignedInteger)(struct JSONReader* reader, unsigned int* out_value);
+  int (*ReadUnsignedInteger)(struct JSONReader* reader, uint64_t* out_value);
+  int (*ReadUint32)(struct JSONReader* reader, uint32_t* out_value);
   int (*ReadInteger)(struct JSONReader* reader, int64_t* out_value);
+  int (*ReadInt32)(struct JSONReader* reader, int32_t* out_value);
   int (*ReadString)(struct JSONReader* reader, char* out_value);
   void (*BeginArray)(struct JSONReader* reader);
   void (*BeginObject)(struct JSONReader* reader);

@@ -70,50 +70,57 @@ class MinRPCServer {
    */
   explicit MinRPCServer(TIOHandler io) : io_(io), arena_(PageAllocator(io)) {}
 
+  bool HasCompletePacket(uint8_t* buffer, size_t buffer_size_bytes) {
+    uint64_t packet_len;
+    if (buffer_size_bytes < packet_len) {
+      return false;
+    }
+
+    memcpy(static_cast<void*>(&packet_len), buffer, sizeof(packet_len));
+    return buffer_size_bytes >= packet_len;
+  }
+
   /*! \brief Run the server loop until shutdown signal is received. */
   void ServerLoop() {
     RPCCode code;
     uint64_t packet_len;
 
-    while (true) {
-      arena_.RecycleAll();
-      allow_clean_shutdown_ = true;
+    arena_.RecycleAll();
+    allow_clean_shutdown_ = true;
 
-      this->Read(&packet_len);
-      if (packet_len == 0) continue;
-      this->Read(&code);
+    this->Read(&packet_len);
+    if (packet_len == 0) return;
+    this->Read(&code);
 
-      allow_clean_shutdown_ = false;
+    allow_clean_shutdown_ = false;
 
-      if (code >= RPCCode::kSyscallCodeStart) {
-        this->HandleSyscallFunc(code);
-      } else {
-        switch (code) {
-          case RPCCode::kCallFunc: {
-            HandleNormalCallFunc();
-            break;
-          }
-          case RPCCode::kInitServer: {
-            HandleInitServer();
-            break;
-          }
-          case RPCCode::kCopyFromRemote: {
-            HandleCopyFromRemote();
-            break;
-          }
-          case RPCCode::kCopyToRemote: {
-            HandleCopyToRemote();
-            break;
-          }
-          case RPCCode::kShutdown: {
-            this->Shutdown();
-            return;
-          }
-          default: {
-            this->ThrowError(RPCServerStatus::kUnknownRPCCode);
-            break;
-          }
-        }
+    if (code >= RPCCode::kSyscallCodeStart) {
+      this->HandleSyscallFunc(code);
+    } else {
+      switch (code) {
+      case RPCCode::kCallFunc: {
+        HandleNormalCallFunc();
+        break;
+      }
+      case RPCCode::kInitServer: {
+        HandleInitServer();
+        break;
+      }
+      case RPCCode::kCopyFromRemote: {
+        HandleCopyFromRemote();
+        break;
+      }
+      case RPCCode::kCopyToRemote: {
+        HandleCopyToRemote();
+        break;
+      }
+      case RPCCode::kShutdown: {
+        this->Shutdown();
+        return;
+      }
+      default: {
+        this->ThrowError(RPCServerStatus::kUnknownRPCCode);
+        break;
       }
     }
   }

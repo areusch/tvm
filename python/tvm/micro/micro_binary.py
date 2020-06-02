@@ -4,7 +4,7 @@ from . import base
 
 class MicroBinary(base.MicroObjectFileBase):
 
-  TAR_FILE_NAMES = dict(MicroObjectFileBase.TAR_FILE_NAMES.items())
+  TAR_FILE_NAMES = dict(base.MicroObjectFileBase.TAR_FILE_NAMES.items())
   TAR_FILE_NAMES['elf_data'] = '{tar_file_root}/{tar_file_root}.elf'
 
 

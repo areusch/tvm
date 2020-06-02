@@ -31,14 +31,22 @@
 /*! Maximum supported arguments in generated functions */
 #define TVM_CRT_MAX_ARGS 10
 /*! Maximum supported string length in dltype, e.g. "int8", "int16", "float32" */
-#define TVM_CRT_STRLEN_DLTYPE 10
+#define TVM_CRT_MAX_DLTYPE_STRLEN 10
 /*! Maximum supported string length in function names */
-#define TVM_CRT_STRLEN_NAME 80
+#define TVM_CRT_MAX_FUNCTION_NAME_STRLEN 80
 
 /*!
  * \brief Log memory pool size for virtual memory allocation
+ */
+#define TVM_CRT_MAX_PAGES 4096
+
+/*! \brief Page size for virtual memory allocation.
  *
  * Here is a list of possible choices:
+ * * use 12 for 4 KiB memory space
+ * * use 13 for 8 KiB memory space
+ * * use 14 for 16 KiB memory space
+ * * use 15 for 32 KiB memory space
  * * use 16 for 64 KiB memory space
  * * use 17 for 128 KiB memory space
  * * use 18 for 256 KiB memory space
@@ -53,10 +61,7 @@
  * * use 27 for 128 MiB memory space
  * * use 28 for 256 MiB memory space
  */
-#define TVM_CRT_LOG_VIRT_MEM_SIZE 24
-
-/*! \brief Page size for virtual memory allocation */
-#define TVM_CRT_PAGE_BYTES 4096
+#define TVM_CRT_PAGE_BITS 12
 
 #include "../../src/runtime/crt/crt_backend_api.c"
 #include "../../src/runtime/crt/crt_runtime_api.c"

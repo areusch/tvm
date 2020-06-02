@@ -212,7 +212,7 @@ int JSONReader_ReadString(JSONReader* reader, char* out_str) {
   return status;
 }
 
-int JSONReader_ReadUnsignedInteger(JSONReader* reader, unsigned int* out_value) {
+int JSONReader_ReadUnsignedInteger(JSONReader* reader, uint64_t* out_value) {
   int status = 0;
   char* endptr;
   const char* icstr = reader->isptr;

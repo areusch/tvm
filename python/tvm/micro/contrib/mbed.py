@@ -1,4 +1,9 @@
+import json
 import logging
+import os
+import re
+import sys
+
 from tvm.contrib import util
 import tvm.micro
 import subprocess
@@ -27,15 +32,31 @@ class NoSuchDeviceError(Exception):
 
 class MbedCompiler(tvm.micro.Compiler):
 
+  def _SetIfNeeded(self, mbed_config_name, value):
+    if value is None:
+      try:
+        value = self._invoke_mbed(['config', mbed_config_name]).strip()
+        if value.startswith('[mbed] '):
+          value = self._mbed_target[len('[mbed] '):]
+
+        return value
+
+      except subprocess.CalledProcessError as e:
+        raise MissingBuildConfig(
+          f'mBED project does not define config {mbed_config_name}, and none is given')
+    else:
+      self._invoke_mbed(['config', mbed_config_name, value])
+      return value
+
   def __init__(self, bootstrap_url=None, project_dir=None, mbed_tool_entrypoint=None,
-               mbed_target=None, mbed_toolchain=None, compiler_path=None):
+               mbed_target=None, mbed_toolchain=None, compiler_path=None, debug=False):
     self._mbed_tool_entrypoint = mbed_tool_entrypoint
-    if self._mbed_tool_entrypoint:
-      self._mbed_tool_entrypoint = [sys.executable, '-m', 'mbed']
+    if self._mbed_tool_entrypoint is None:
+      self._mbed_tool_entrypoint = [sys.executable, '-mmbed']
 
     self._project_dir = project_dir
     if self._project_dir is None:
-      self._project_dir = util.tempdir().temp_dir
+      self._project_dir = os.path.realpath(util.tempdir().temp_dir)
 
     if bootstrap_url is not None:
       if os.path.exists(os.path.join(self._project_dir), '.git'):
@@ -58,34 +79,18 @@ class MbedCompiler(tvm.micro.Compiler):
       raise InvalidMbedProjectError(
         f'Did not find mbed_app.json at the root of project {project_dir}')
 
-    if mbed_target is None:
-      try:
-        self._mbed_target = self._invoke_mbed(['config', 'TARGET']).strip()
-        if self._mbed_target.startswith('[mbed] '):
-          self._mbed_target = self._mbed_target[len('[mbed] '):]
+    self._mbed_target = self._SetIfNeeded('TARGET', mbed_target)
+    self._mbed_toolchain = self._SetIfNeeded('TOOLCHAIN', mbed_toolchain)
 
-      except subprocess.CalledProcessError as e:
-        raise MissingBuildConfig(
-          f'mBED project does not define a target, and none is given')
-    else:
-      self._invoke_mbed(['target', mbed_target])
-      self._mbed_target = mbed_target
-
-    if mbed_toolchain is None:
-      try:
-        self._invoke_mbed(['toolchain'])
-      except subprocess.CalledProcessError as e:
-        raise MissingBuildConfig(
-          f'mBED project does not define a toolchain, and none is given')
-
-      if compiler_path is not None:
+    if compiler_path is not None:
+      if mbed_toolchain is None:
         raise MissingBuildConfig(
           f'compiler_path= is only respected when mbed_toolchain= is also given')
 
-    else:
-      self._invoke_mbed(['toolchain', mbed_toolchain])
       if compiler_path is None:
         self._invoke_mbed(['config', f'{mbed_toolchain}_PATH'])
+
+    self.debug = debug
 
   SOURCE_EXTS = ['s', 'c', 'cc', 'cpp', 'o', 'a']
 
@@ -106,6 +111,23 @@ class MbedCompiler(tvm.micro.Compiler):
 
     return True
 
+  def _OptionsToArgs(self, options):
+    profile_name = options.get('profile-name', 'release.json' if not self.debug else 'develop.json')
+    profile_path = os.path.join(f'{self._project_dir}/mbed-os/tools/profiles', profile_name)
+    if 'profile' in options:
+      with open(profile_path) as profile_f:
+        profile = json.load(profile_f)
+
+      for key in options['profile']:
+        profile[self._mbed_toolchain][key] = (
+          profile[self._mbed_toolchain].get(key, []) + options['profile'][key])
+
+      profile_path = os.path.join(self._project_dir, 'tvm_profile.json')
+      with open(profile_path, 'w') as profile_f:
+        json.dump(profile, profile_f, sort_keys=True, indent=4)
+
+    return ['--profile', profile_path] + options.get('args', [])
+
   def Library(self, output, objects, options=None):
     all_dirnames = [os.path.dirname(obj) for obj in objects]
     src_dir = all_dirnames[0]
@@ -121,9 +143,13 @@ class MbedCompiler(tvm.micro.Compiler):
         shutil.copy(obj, dest)
 
     else:
-      build_dir = util.tempdir().tempdir()
+      build_dir = util.tempdir().temp_dir
 
-    self._invoke_mbed(['compile', '--library', '--source', src_dir, '--build', build_dir])
+    args = ['compile', '--library', '--source', src_dir, '--build', os.path.realpath(build_dir)]
+    if options:
+      args += self._OptionsToArgs(options)
+
+    self._invoke_mbed(args)
 
   IMAGE_RE = re.compile('^Image: ./(.*)$', re.MULTILINE)
 
@@ -148,6 +174,9 @@ class MbedCompiler(tvm.micro.Compiler):
 
   def Flasher(self, target_serial_number=None):
     return Flasher(self._mbed_target, target_serial_number)
+
+  def _invoke_mbed(self, args):
+    subprocess.check_call(self._mbed_tool_entrypoint + args, cwd=self._project_dir)
 
 
 class Flasher(tvm.micro.Flasher):

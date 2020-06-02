@@ -22,36 +22,23 @@
  * \brief The virtual memory manager for micro-controllers
  */
 
-#ifndef TVM_RUNTIME_CRT_MEMORY_H_
-#define TVM_RUNTIME_CRT_MEMORY_H_
+#ifndef TVM_RUNTIME_CRT_PLATFORM_H_
+#define TVM_RUNTIME_CRT_PLATFORM_H_
 
-/*!
- * \brief Allocate memory from manager
- * \param size The size of memory
- * \return The virtual address
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*! \brief Called when an internal error occurs and execution cannot continue.
+ *
+ * The platform should ideally restart or hang at this point.
+ *
+ * \param code An error code.
  */
-void* vmalloc(size_t size);
+void TVMPlatformAbort(int code);
 
-/*!
- * \brief Reallocate memory from manager
- * \param ptr The pointer to the memory area to be reallocated
- * \param size The size of memory
- * \return The virtual address
- */
-void* vrealloc(void* ptr, size_t size);
+#ifdef __cplusplus
+}
+#endif
 
-/*!
- * \brief Free the memory.
- * \param ptr The pointer to the memory to deallocate
- * \return The virtual address
- */
-void vfree(void* ptr);
-
-/*! \brief Physical address type */
-typedef uintptr_t tvm_phy_addr_t;
-
-struct MemoryManager;
-
-struct MemoryManager* TVMGetGlobalMemoryManager(void);
-
-#endif  // TVM_RUNTIME_CRT_MEMORY_H_
+#endif  // TVM_RUNTIME_CRT_PLATFORM_H_

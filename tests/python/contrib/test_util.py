@@ -38,6 +38,9 @@ def test_tempdir():
   temp_dir = util.tempdir()
   assert os.path.exists(temp_dir.temp_dir)
 
+  # See commentary in TempDirectory.
+  assert os.path.realpath(temp_dir.temp_dir) == temp_dir.temp_dir
+
   old_debug_mode = util.TempDirectory._KEEP_FOR_DEBUG
   try:
     for temp_dir_number in range(0, 3):

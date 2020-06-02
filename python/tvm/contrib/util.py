@@ -100,7 +100,10 @@ class TempDirectory(object):
                 self.temp_dir = f'{parent_dir}/{self._increment_num_tempdir_created():05d}'
                 os.mkdir(self.temp_dir)
             else:
-                self.temp_dir = tempfile.mkdtemp()
+                # NOTE: on Mac OS X, mkdtemp() tends to create directories inside a symlink. This
+                # can cause confusion downstream if the symlink is resolved out of the path and
+                # relative paths are computed. Resolve the symlink now to avoid confusion.
+                self.temp_dir = os.path.realpath(tempfile.mkdtemp())
 
         if not self._created_with_keep_for_debug:
             self.TEMPDIRS.add(self.temp_dir)

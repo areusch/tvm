@@ -1,3 +1,4 @@
+import abc
 import contextlib
 import serial
 import serial.tools.list_ports
@@ -6,9 +7,6 @@ import typing
 
 class SerialPortNotFoundError(Exception):
   """Raised when SerialSession cannot find the serial port specified."""
-
-
-TransportContextManager = typing.ContextManager[Transport]
 
 
 def transport_context_manager(fcreate, *args, **kw):
@@ -64,3 +62,6 @@ class SerialTransport(Transport):
 
     def write(self, data):
         return self._port.write(data)
+
+
+TransportContextManager = typing.ContextManager[Transport]

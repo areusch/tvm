@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <tvm/runtime/c_runtime_api.h>
 
+#include "crt_config.h"
 #include "module.h"
 
 static inline DLDataType String2DLDataType(const char* s) {
@@ -102,7 +103,7 @@ static inline int TVMNoOperation(TVMValue* args, int* type_codes, int num_args,
 }
 
 typedef struct TVMPackedFunc {
-  char name[200];
+  char name[TVM_CRT_MAX_FUNCTION_NAME_LENGTH_BYTES];
   TVMPackedCFunc fexec;
   TVMArgs args;
   void (*Call)(struct TVMPackedFunc* pf);
@@ -123,7 +124,7 @@ uint32_t g_fexecs_count = 0;
 // Implement TVMModule::GetFunction
 // Put implementation in this file so we have seen the TVMPackedFunc
 static inline void TVMModule_GetFunction(TVMModule* mod, const char* name, TVMPackedFunc* pf) {
-  int idx;
+  uint32_t idx;
   memset(pf, 0, sizeof(TVMPackedFunc));
   assert(strlen(name) <= sizeof(pf->name));
   snprintf(pf->name, strlen(name), "%s", name);
