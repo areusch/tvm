@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <tvm/runtime/c_backend_api.h>
+#include <tvm/runtime/c_runtime_api.h>
 #include <tvm/runtime/crt/memory.h>
 #include "packed_func.h"
 
@@ -47,9 +48,5 @@ int TVMBackendParallelLaunch(FTVMParallelLambda flambda, void* cdata, int num_ta
 }
 
 int TVMBackendRegisterSystemLibSymbol(const char* name, void* ptr) {
-  g_fexecs = vrealloc(g_fexecs, sizeof(TVMPackedFunc) * (g_fexecs_count + 1));
-  snprintf(g_fexecs[g_fexecs_count].name, sizeof(g_fexecs[g_fexecs_count].name), "%s", name);
-  g_fexecs[g_fexecs_count].fexec = ptr;
-  g_fexecs_count++;
-  return 0;
+  return TVMFuncRegisterGlobal(name, ptr, 0);
 }

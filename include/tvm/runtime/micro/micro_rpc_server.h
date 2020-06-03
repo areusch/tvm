@@ -38,10 +38,10 @@ extern "C" {
  * \param num_bytes Number of bytes avaiable in data.
  * \return The number of bytes written.
  */
-typedef size_t (*tvm_rpc_channel_write_t)(void* context, uint8_t* data, size_t num_bytes);
+typedef ssize_t (*utvm_rpc_channel_write_t)(void* context, const uint8_t* data, size_t num_bytes);
 
 /*! \brief Opaque pointer type to TVM RPC Server. */
-typedef void* tvm_rpc_server_t;
+typedef void* utvm_rpc_server_t;
 
 /*! \brief Initialize the TVM RPC Server.
  *
@@ -53,7 +53,7 @@ typedef void* tvm_rpc_server_t;
  * \return A pointer to the TVM RPC Server. The pointer is allocated in the same memory space as
  *         the TVM workspace.
  */
-tvm_rpc_server_t utvm_rpc_server_init(tvm_rpc_channel_write_t write_func);
+utvm_rpc_server_t utvm_rpc_server_init(utvm_rpc_channel_write_t write_func, void* write_func_ctx);
 
 /*! \brief Copy received data into an internal buffer for processing.
  *
@@ -67,13 +67,13 @@ tvm_rpc_server_t utvm_rpc_server_init(tvm_rpc_channel_write_t write_func);
  * \return The number of bytes copied to the internal buffer. May be less than data_size_bytes when
  * the internal buffer fills.
  */
-size_t utvm_rpc_server_receive_data(tvm_rpc_server_t server, uint8_t* data, size_t data_size_bytes);
+size_t utvm_rpc_server_receive_data(utvm_rpc_server_t server, const uint8_t* data, size_t data_size_bytes);
 
 /*! \brief Perform normal processing of received data.
  *
  * \param server The TVM RPC Server pointer.
  */
-void utvm_rpc_server_loop(tvm_rpc_server_t server);
+void utvm_rpc_server_loop(utvm_rpc_server_t server);
 
 #ifdef __cplusplus
 }

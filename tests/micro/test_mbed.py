@@ -15,17 +15,34 @@ def test_compile_runtime():
   temp = util.tempdir()
 
   root_dir = os.path.realpath(f'{os.path.dirname(__file__)}/../..')
-  srcs = glob.glob(f'{root_dir}/src/runtime/crt/*.c')
-  compiler.Library(
-    temp.relpath('runtime.o'),
-    srcs,
-    options={
-      'profile': {'common': ['-Werror']},
-      'args': ['--source', f'{root_dir}/include',
-               '--source', f'{root_dir}/3rdparty/dlpack/include',
-               '--source', f'{project_dir}/crt',
-               '--source', f'{root_dir}/3rdparty/dmlc-core/include']})
+  opts = {
+    'profile': {'common': ['-Werror']},
+    'args': ['--source', f'{root_dir}/include',
+             '--source', f'{root_dir}/3rdparty/dlpack/include',
+             '--source', f'{project_dir}/crt',
+             '--source', f'{root_dir}/3rdparty/dmlc-core/include'],
+  }
 
+  crt_common = temp.relpath('crt_common.a')
+  compiler.Library(
+    crt_common,
+    glob.glob(f'{root_dir}/src/runtime/crt/common/*.c'),
+    options=opts)
+  rpc_server = temp.relpath('rpc_server.a')
+  compiler.Library(
+    rpc_server,
+    glob.glob(f'{root_dir}/src/runtime/crt/rpc_server/*.cc'),
+    options=opts)
+  print('compiled', rpc_server)
+
+  opts['profile']['common'] = []
+  binary = temp.relpath('runtime')
+  compiler.Binary(
+    binary,
+    [crt_common, rpc_server],
+    options=opts)
+
+  compiler.Flasher().Flash(binary)
 
 if __name__ == '__main__':
   test_compile_runtime()

@@ -30,9 +30,10 @@
 
 #include <dmlc/endian.h>
 #include <tvm/runtime/c_runtime_api.h>
+#include <cstring>
 
-#include "../../../support/arena.h"
-#include "../rpc_protocol.h"
+#include "../../../support/generic_arena.h"
+#include "rpc_protocol.h"
 
 /*! \brief Whether or not to enable glog style DLOG */
 #ifndef TVM_MINRPC_ENABLE_LOGGING
@@ -68,20 +69,24 @@ class MinRPCServer {
    * \brief Constructor.
    * \param io The IO handler.
    */
-  explicit MinRPCServer(TIOHandler io) : io_(io), arena_(PageAllocator(io)) {}
+  explicit MinRPCServer(TIOHandler* io) : io_(io), arena_(PageAllocator(io)) {}
 
-  bool HasCompletePacket(uint8_t* buffer, size_t buffer_size_bytes) {
+  bool HasCompletePacket(const uint8_t* buffer, size_t buffer_size_bytes) {
     uint64_t packet_len;
-    if (buffer_size_bytes < packet_len) {
+    if (buffer_size_bytes < sizeof(packet_len)) {
       return false;
     }
 
     memcpy(static_cast<void*>(&packet_len), buffer, sizeof(packet_len));
-    return buffer_size_bytes >= packet_len;
+    return buffer_size_bytes >= packet_len + sizeof(packet_len);
   }
 
-  /*! \brief Run the server loop until shutdown signal is received. */
-  void ServerLoop() {
+  /*! \brief Process a single request.
+   *
+   * \return true when the server should continue processing requests. false when it should be
+   *  shutdown.
+   */
+  bool ProcessOnePacket() {
     RPCCode code;
     uint64_t packet_len;
 
@@ -89,7 +94,7 @@ class MinRPCServer {
     allow_clean_shutdown_ = true;
 
     this->Read(&packet_len);
-    if (packet_len == 0) return;
+    if (packet_len == 0) return true;
     this->Read(&code);
 
     allow_clean_shutdown_ = false;
@@ -116,18 +121,21 @@ class MinRPCServer {
       }
       case RPCCode::kShutdown: {
         this->Shutdown();
-        return;
+        return false;
       }
       default: {
         this->ThrowError(RPCServerStatus::kUnknownRPCCode);
         break;
       }
+      }
     }
+
+    return true;
   }
 
   void Shutdown() {
     arena_.FreeAll();
-    io_.Close();
+    io_->Close();
   }
 
   void HandleNormalCallFunc() {
@@ -430,7 +438,7 @@ class MinRPCServer {
   }
 
   void ThrowError(RPCServerStatus code, RPCCode info = RPCCode::kNone) {
-    io_.Exit(static_cast<int>(code));
+    io_->Exit(static_cast<int>(code));
   }
 
   template <typename T>
@@ -469,7 +477,7 @@ class MinRPCServer {
    public:
     using ArenaPageHeader = tvm::support::ArenaPageHeader;
 
-    explicit PageAllocator(TIOHandler io) : io_(io) {}
+    explicit PageAllocator(TIOHandler* io) : io_(io) {}
 
     ArenaPageHeader* allocate(size_t min_size) {
       size_t npages = ((min_size + kPageSize - 1) / kPageSize);
@@ -477,7 +485,7 @@ class MinRPCServer {
 
       if (TVMDeviceAllocDataSpace(DLContext{kDLCPU, 0}, npages * kPageSize, kPageAlign,
                                   DLDataType{kDLInt, 1, 1}, &data) != 0) {
-        io_.Exit(static_cast<int>(RPCServerStatus::kAllocError));
+        io_->Exit(static_cast<int>(RPCServerStatus::kAllocError));
       }
 
       ArenaPageHeader* header = static_cast<ArenaPageHeader*>(data);
@@ -488,7 +496,7 @@ class MinRPCServer {
 
     void deallocate(ArenaPageHeader* page) {
       if (TVMDeviceFreeDataSpace(DLContext{kDLCPU, 0}, page) != 0) {
-        io_.Exit(static_cast<int>(RPCServerStatus::kAllocError));
+        io_->Exit(static_cast<int>(RPCServerStatus::kAllocError));
       }
     }
 
@@ -496,7 +504,7 @@ class MinRPCServer {
     static const constexpr int kPageAlign = 8;
 
    private:
-    TIOHandler io_;
+    TIOHandler* io_;
   };
 
   void RecvPackedSeq(TVMValue** out_values, int** out_tcodes, int* out_num_args) {
@@ -544,11 +552,11 @@ class MinRPCServer {
     uint8_t* buf = reinterpret_cast<uint8_t*>(data);
     size_t ndone = 0;
     while (ndone < size) {
-      ssize_t ret = io_.PosixRead(buf, size - ndone);
+      ssize_t ret = io_->PosixRead(buf, size - ndone);
       if (ret == 0) {
         if (allow_clean_shutdown_) {
           this->Shutdown();
-          io_.Exit(0);
+          io_->Exit(0);
         } else {
           this->ThrowError(RPCServerStatus::kReadError);
         }
@@ -565,7 +573,7 @@ class MinRPCServer {
     const uint8_t* buf = reinterpret_cast<const uint8_t*>(data);
     size_t ndone = 0;
     while (ndone < size) {
-      ssize_t ret = io_.PosixWrite(buf, size - ndone);
+      ssize_t ret = io_->PosixWrite(buf, size - ndone);
       if (ret == 0 || ret == -1) {
         this->ThrowError(RPCServerStatus::kWriteError);
       }
@@ -575,7 +583,7 @@ class MinRPCServer {
   }
 
   /*! \brief IO handler. */
-  TIOHandler io_;
+  TIOHandler* io_;
   /*! \brief internal arena. */
   support::GenericArena<PageAllocator> arena_;
   /*! \brief Whether we are in a state that allows clean shutdown. */

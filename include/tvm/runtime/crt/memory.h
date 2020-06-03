@@ -25,8 +25,14 @@
 #ifndef TVM_RUNTIME_CRT_MEMORY_H_
 #define TVM_RUNTIME_CRT_MEMORY_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <inttypes.h>
 #include <stdlib.h>
+
+
 
 /*!
  * \brief Allocate memory from manager
@@ -58,5 +64,10 @@ typedef struct MemoryManager MemoryManager;
 MemoryManager* MemoryManagerCreate(uint8_t* memory_pool,
                                    size_t memory_pool_size_bytes,
                                    size_t page_size_bytes_log2);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+
 
 #endif  // TVM_RUNTIME_CRT_MEMORY_H_

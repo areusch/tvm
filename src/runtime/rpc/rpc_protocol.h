@@ -24,55 +24,52 @@
 #ifndef TVM_RUNTIME_RPC_RPC_PROTOCOL_H_
 #define TVM_RUNTIME_RPC_RPC_PROTOCOL_H_
 
-#include "rpc_protocol_c.h"
-
 namespace tvm {
 namespace runtime {
 
 /*! \brief The current RPC procotol version. */
-constexpr const char* kRPCProtocolVer = tvm_rpc__protocol_ver;
+constexpr const char* kRPCProtocolVer = "0.7.0";
 
 /*! \brief The RPC code */
 enum class RPCCode : int {
-  kNone = tvm_rpc__rpc_code_kNone,
-  kShutdown = tvm_rpc__rpc_code_Shutdown,
-  kInitServer = tvm_rpc__rpc_code_InitServer,
-  kCallFunc = tvm_rpc__rpc_code_CallFunc,
-  kReturn = tvm_rpc__rpc_code_Return,
-  kException = tvm_rpc__rpc_code_Exception,
-  kCopyFromRemote = tvm_rpc__rpc_code_CopyFromRemote,
-  kCopyToRemote = tvm_rpc__rpc_code_CopyToRemote,
-  kCopyAck = tvm_rpc__rpc_code_CopyAck,
+  kNone,
+  kShutdown,
+  kInitServer,
+  kCallFunc,
+  kReturn,
+  kException,
+  kCopyFromRemote,
+  kCopyToRemote,
+  kCopyAck,
   // The following are syscall code that can send over CallRemote
-  kSyscallCodeStart = tvm_rpc__rpc_code_SyscallCodeStart,
-  kGetGlobalFunc = tvm_rpc__rpc_code_kGetGlobalFunc,
-  kFreeHandle = tvm_rpc__rpc_code_FreeHandle,
-  kDevSetDevice = tvm_rpc__rpc_code_DevSetDevice,
-  kDevGetAttr = tvm_rpc__rpc_code_DevGetAttr,
-  kDevAllocData = tvm_rpc__rpc_code_DevAllocData,
-  kDevFreeData = tvm_rpc__rpc_code_DevFreeData,
-  kDevStreamSync = tvm_rpc__rpc_code_DevStreamSync,
-  kCopyAmongRemote = tvm_rpc__rpc_code_CopyAmongRemote,
+  kSyscallCodeStart,
+  kGetGlobalFunc = kSyscallCodeStart,
+  kFreeHandle,
+  kDevSetDevice,
+  kDevGetAttr,
+  kDevAllocData,
+  kDevFreeData,
+  kDevStreamSync,
+  kCopyAmongRemote,
 };
-
 
 /*!
  * \brief List of potential error status during rpc communication.
  */
 enum class RPCServerStatus : int {
-  kSuccess = tvm_rpc__rpc_status_Success,
-  kInvalidTypeCodeObject = tvm_rpc__rpc_status_InvalidTypeCodeObject,
-  kInvalidTypeCodeNDArray = tvm_rpc__rpc_status_InvalidTypeCodeNDArray,
-  kInvalidDLTensorFieldStride = tvm_rpc__rpc_status_InvalidDLTensorFieldStride,
-  kInvalidDLTensorFieldByteOffset = tvm_rpc__rpc_status_InvalidDLTensorFieldByteOffset,
-  kUnknownTypeCode = tvm_rpc__rpc_status_UnknownTypeCode,
-  kUnknownRPCCode = tvm_rpc__rpc_status_UnknownRPCCode,
-  kRPCCodeNotSupported = tvm_rpc__rpc_status_RPCCodeNotSupported,
-  kUnknownRPCSyscall = tvm_rpc__rpc_status_UnknownRPCSyscall,
-  kCheckError = tvm_rpc__rpc_status_CheckError,
-  kReadError = tvm_rpc__rpc_status_ReadError,
-  kWriteError = tvm_rpc__rpc_status_WriteError,
-  kAllocError = tvm_rpc__rpc_status_kAllocrror
+  kSuccess = 0,
+  kInvalidTypeCodeObject,
+  kInvalidTypeCodeNDArray,
+  kInvalidDLTensorFieldStride,
+  kInvalidDLTensorFieldByteOffset,
+  kUnknownTypeCode,
+  kUnknownRPCCode,
+  kRPCCodeNotSupported,
+  kUnknownRPCSyscall,
+  kCheckError,
+  kReadError,
+  kWriteError,
+  kAllocError
 };
 
 /*!
@@ -81,7 +78,37 @@ enum class RPCServerStatus : int {
  * \return The corresponding string.
  */
 inline const char* RPCServerStatusToString(RPCServerStatus status) {
-  return tvm_rpc__rpc_status_to_string(status);
+  switch (status) {
+    case RPCServerStatus::kSuccess:
+      return "kSuccess";
+    case RPCServerStatus::kInvalidTypeCodeObject:
+      return "kInvalidTypeCodeObject";
+    case RPCServerStatus::kInvalidTypeCodeNDArray:
+      return "kInvalidTypeCodeNDArray";
+    case RPCServerStatus::kInvalidDLTensorFieldStride:
+      return "kInvalidDLTensorFieldStride";
+    case RPCServerStatus::kInvalidDLTensorFieldByteOffset: {
+      return "kInvalidDLTensorFieldByteOffset";
+    }
+    case RPCServerStatus::kUnknownTypeCode:
+      return "kUnknownTypeCode";
+    case RPCServerStatus::kUnknownRPCCode:
+      return "kUnknownRPCCode";
+    case RPCServerStatus::kRPCCodeNotSupported:
+      return "RPCCodeNotSupported";
+    case RPCServerStatus::kUnknownRPCSyscall:
+      return "kUnknownRPCSyscall";
+    case RPCServerStatus::kCheckError:
+      return "kCheckError";
+    case RPCServerStatus::kReadError:
+      return "kReadError";
+    case RPCServerStatus::kWriteError:
+      return "kWriteError";
+    case RPCServerStatus::kAllocError:
+      return "kAllocError";
+    default:
+      return "";
+  }
 }
 
 /*!

@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
   if (argc != 3) return -1;
   // pass the descriptor via arguments.
   tvm::runtime::PosixIOHandler handler(atoi(argv[1]), atoi(argv[2]));
-  tvm::runtime::PosixMinRPCServer server(handler);
+  tvm::runtime::PosixMinRPCServer server(&handler);
   server.ServerLoop();
   return 0;
 }

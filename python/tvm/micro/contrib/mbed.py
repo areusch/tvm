@@ -1,7 +1,9 @@
+import glob
 import json
 import logging
 import os
 import re
+import shutil
 import sys
 
 from tvm.contrib import util
@@ -145,53 +147,69 @@ class MbedCompiler(tvm.micro.Compiler):
     else:
       build_dir = util.tempdir().temp_dir
 
-    args = ['compile', '--library', '--source', src_dir, '--build', os.path.realpath(build_dir)]
+    args = ['compile', '--library', '--source', src_dir, ]
+    artifact_name = os.path.splitext(os.path.basename(output))[0]
+    args.extend(['--build', os.path.realpath(build_dir), '-N', artifact_name])
     if options:
       args += self._OptionsToArgs(options)
 
     self._invoke_mbed(args)
+    shutil.copy2(os.path.join(os.path.realpath(build_dir), f'lib{artifact_name}.a'),
+                 output)
 
   IMAGE_RE = re.compile('^Image: ./(.*)$', re.MULTILINE)
 
+  GLOB_PATTERNS = ['__tvm_*', 'libtvm__*']
+
   def Binary(self, output, objects, options=None):
     copied = []
-    for f in os.path.listdir(self._project_dir):
-      if f.startswith('__tvm_'):
+    for p in self.GLOB_PATTERNS:
+      for f in glob.glob(os.path.join(self._project_dir, p)):
         os.unlink(f)
 
     for obj in objects:
-      dest = f'__tvm_{obj}'
+      obj_base = os.path.basename(obj)
+      if obj_base.endswith('.a'):
+        dest = os.path.join(self._project_dir, f'libtvm__{obj_base}')
+      else:
+        dest = os.path.join(self._project_dir, f'__tvm_{obj_base}')
+
       shutil.copy(obj, dest)
 
-    output = self._invoke_mbed(['compile'])
-    img_shutil = self.IMAGE_RE.search(output)
-    if not img_shutil:
-      raise BuildError('Image not found in mbed stdout:\n{output}')
+    args = ['compile', '--source', '.']
+    if options:
+      args += self._OptionsToArgs(options)
 
-    elf_path = f'{os.path.splitext(img_shutil)[0]}.elf'
+    artifact_name = os.path.splitext(os.path.basename(output))[0]
+    args += ['-N', artifact_name]
 
-    path.copy(os.path.join(self._project_dir, elf_path), output)
+    build_dir = util.tempdir()
+    args += ['--build', build_dir.temp_dir]
+    self._invoke_mbed(args)
+    elf_path = os.path.join(build_dir.temp_dir, f'{artifact_name}.elf')
+
+    shutil.copy(elf_path, output)
 
   def Flasher(self, target_serial_number=None):
     return Flasher(self._mbed_target, target_serial_number)
 
   def _invoke_mbed(self, args):
-    subprocess.check_call(self._mbed_tool_entrypoint + args, cwd=self._project_dir)
+    return subprocess.check_output(self._mbed_tool_entrypoint + args, cwd=self._project_dir)
 
 
 class Flasher(tvm.micro.Flasher):
 
   def __init__(self, mbed_target, target_serial_number=None):
+    self._mbed_target = mbed_target
     self._target_serial_number = target_serial_number
     d = mbed_os_tools.detect.create()
-    devices = d.list_mbeds(filter_function=self._filter_mbed)
-    logger.debug('Found devices: %r', devices)
-    if self._target_serial_number is not None and len(devices) != 1:
+    self._devices = d.list_mbeds(filter_function=self._filter_mbed)
+    logger.debug('Found devices: %r', self._devices)
+    if self._target_serial_number is not None and len(self._devices) != 1:
         raise NoSuchDeviceError(
             f'No mBED device with serial number {target_serial_number}')
-    elif self._target_serial_number is None and not devices:
+    elif self._target_serial_number is None and not self._devices:
         raise NoSuchDeviceError('No mBED device found')
-
 
   def _filter_mbed(self, device):
     if device['platform_name'] != self._mbed_target:
@@ -203,6 +221,8 @@ class Flasher(tvm.micro.Flasher):
     return True
 
   def Flash(self, micro_binary):
-    mbed_os_tools.test.host_tests_toolbox.flash_dev(devices[0]['mount_point'], binary, program_cycle_s=4)
-    return transport.transport_context_manager(
-      tvm.micro.channel.SerialChannel, devices[0]['serial_port'], baudrate=115200)
+    print('flashing', micro_binary)
+    mbed_os_tools.test.host_tests_toolbox.flash_dev(
+        self._devices[0]['mount_point'], micro_binary, program_cycle_s=4)
+    return tvm.micro.transport.transport_context_manager(
+      tvm.micro.transport.SerialTransport, self._devices[0]['serial_port'], baudrate=115200)

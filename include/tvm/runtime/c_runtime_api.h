@@ -163,6 +163,14 @@ typedef void* TVMStreamHandle;
 /*! \brief Handle to Object. */
 typedef void* TVMObjectHandle;
 
+
+/*! \brief Initialize internal runtime components.
+ *
+ * Call this function before calling any other functions in the runtime.
+ * \return 0 when success, negative integer when error occurs.
+ */
+TVM_DLL int TVMInitializeRuntime(void);
+
 /*!
  * \brief Used for implementing C API function.
  *  Set last error message before return.

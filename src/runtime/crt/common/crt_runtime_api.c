@@ -22,8 +22,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <tvm/runtime/c_runtime_api.h>
+#include <tvm/runtime/crt/platform.h>
+#include <tvm/runtime/crt/memory.h>
 
-#include "graph_runtime.h"
 #include "ndarray.h"
 #include "packed_func.h"
 
@@ -66,12 +67,12 @@ int TVMDeviceAllocDataSpace(DLContext ctx, size_t nbytes, size_t alignment, DLDa
     nbytes = (nbytes + alignment - 1) / alignment * alignment;
   }
 
-  *out_data = TVMBackendAllocWorkspace(ctx.device_type, ctx.device_id, nbytes, type_hint.code, 8);
+  *out_data = vmalloc(nbytes);
   return 0;
 }
 
 int TVMDeviceFreeDataSpace(TVMContext ctx, void *ptr) {
-  TVMBackendFreeWorkspace(ctx.device_type, ctx.device_id, ptr);
+  vfree(ptr);
   return 0;
 }
 
@@ -91,34 +92,74 @@ void* SystemLibraryCreate() { return 0; }
 
 int TVMModGetFunction(TVMModuleHandle mod, const char* func_name, int query_imports,
                       TVMFunctionHandle* out) {
-  int status = 0;
-  if (!strcmp(func_name, "load_params")) {
-    *out = &TVMGraphRuntime_LoadParams;
-  } else {
-    status = -1;
-  }
-  return status;
+  TVMModule* mod_ptr = (TVMModule*) mod;
+  TVMPackedFunc pf;
+  mod_ptr->GetFunction(mod_ptr, func_name, &pf);
+  *out = pf.fexec;
+  return 0;
 }
 
+typedef struct TVMCReturnValue {
+  TVMValue* ret_val;
+  int* ret_type_code;
+} TVMCReturnValue;
+
+int TVMFuncCall(TVMFunctionHandle func, TVMValue* arg_values, int* type_codes, int num_args,
+                TVMValue* ret_val, int* ret_type_code) {
+  TVMPackedCFunc cfunc = (TVMPackedCFunc) func;
+  TVMCReturnValue ret_val_struct;
+  ret_val_struct.ret_val = ret_val;
+  ret_val_struct.ret_type_code = ret_type_code;
+  cfunc(arg_values, type_codes, num_args, &ret_val_struct, NULL);
+  return 0;
+}
+
+int TVMCFuncSetReturn(TVMRetValueHandle ret, TVMValue* value, int* type_code, int num_ret) {
+  TVMCReturnValue* ret_val;
+  int idx;
+
+  ret_val = (TVMCReturnValue*) ret;
+  for (idx = 0; idx < num_ret; idx++) {
+    ret_val->ret_val[idx] = value[idx];
+    ret_val->ret_type_code[idx] = type_code[idx];
+  }
+
+  return 0;
+}
+
+int TVMFuncFree(TVMFunctionHandle func) {
+  // A no-op, since we don't actually allocate anything in GetFunction
+  return 0;
+}
+
+int TVMModFree(TVMModuleHandle mod ) {
+  // A no-op, since we never allocate module handles.
+  return 0;
+}
+
+static TVMMutableFuncRegistry global_func_registry;
+
 int TVMFuncGetGlobal(const char* name, TVMFunctionHandle* out) {
-  int status = 0;
-  if (!strcmp(name, "tvm.graph_runtime.create")) {
-    *out = &TVMGraphRuntimeCreate;
-  } else if (!strcmp(name, "tvm.graph_runtime.set_input")) {
-    *out = &TVMGraphRuntime_SetInput;
-  } else if (!strcmp(name, "tvm.graph_runtime.run")) {
-    *out = &TVMGraphRuntime_Run;
-  } else if (!strcmp(name, "tvm.graph_runtime.get_output")) {
-    *out = &TVMGraphRuntime_GetOutput;
-  } else if (!strcmp(name, "tvm.graph_runtime.release")) {
-    *out = &TVMGraphRuntimeRelease;
-  } else if (!strcmp(name, "runtime.SystemLib")) {
-    *out = &SystemLibraryCreate;
-  } else {
-    char msg[200];
+  *out = (TVMFunctionHandle) TVMFuncRegistry_GetCFunction(&global_func_registry.reg, name);
+  if (*out == NULL) {
+    char msg[26 + TVM_CRT_MAX_STRLEN_FUNCTION_NAME];
     snprintf(msg, sizeof(msg), "fail to get global: name=%s", name);
     TVMAPISetLastError(msg);
-    status = -1;
+    return -1;
   }
-  return status;
+
+  return 0;
+}
+
+int TVMFuncRegisterGlobal(const char* name, TVMFunctionHandle f, int override) {
+  return TVMMutableFuncRegistry_Set(&global_func_registry, name, f, override != 0);
+}
+
+int TVMInitializeRuntime() {
+  TVMMutableFuncRegistry_Create(&global_func_registry,
+                                vmalloc(TVM_CRT_GLOBAL_FUNC_REGISTRY_SIZE_BYTES),
+                                TVM_CRT_GLOBAL_FUNC_REGISTRY_SIZE_BYTES);
+
+  TVMFuncRegisterGlobal("runtime.SystemLib", &SystemLibraryCreate, 0);
+  return 0;
 }

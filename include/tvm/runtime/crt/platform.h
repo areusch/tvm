@@ -35,10 +35,10 @@ extern "C" {
  *
  * \param code An error code.
  */
-void TVMPlatformAbort(int code);
+void __attribute__((noreturn)) TVMPlatformAbort(int code);
 
 #ifdef __cplusplus
-}
+}  // extern "C"
 #endif
 
 #endif  // TVM_RUNTIME_CRT_PLATFORM_H_
