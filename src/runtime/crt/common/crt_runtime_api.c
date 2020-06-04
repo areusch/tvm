@@ -22,8 +22,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <tvm/runtime/c_runtime_api.h>
-#include <tvm/runtime/crt/platform.h>
 #include <tvm/runtime/crt/memory.h>
+#include <tvm/runtime/crt/module.h>
+#include <tvm/runtime/crt/platform.h>
 
 #include "ndarray.h"
 #include "packed_func.h"
@@ -88,7 +89,20 @@ int TVMSynchronize(int device_type, int device_id, TVMStreamHandle stream) {
   return 0;
 }
 
-void* SystemLibraryCreate() { return 0; }
+static const TVMModule* system_lib = NULL;
+
+int SystemLibraryCreate(TVMValue* args, int* type_codes, int num_args, TVMRetValueHandle ret, void* resource_handle) {
+  fprintf(stderr, "system lib create\n");
+  if (system_lib == NULL) {
+    system_lib = TVMSystemLibEntryPoint();
+  }
+
+  TVMValue ret_val;
+  ret_val.v_handle = (void*) system_lib;
+  int type_code = kTVMModuleHandle;
+  TVMCFuncSetReturn(ret, &ret_val, &type_code, 1);
+  return 0;
+}
 
 int TVMModGetFunction(TVMModuleHandle mod, const char* func_name, int query_imports,
                       TVMFunctionHandle* out) {
@@ -96,6 +110,31 @@ int TVMModGetFunction(TVMModuleHandle mod, const char* func_name, int query_impo
   TVMPackedFunc pf;
   mod_ptr->GetFunction(mod_ptr, func_name, &pf);
   *out = pf.fexec;
+  return 0;
+}
+
+int ModuleGetFunction(TVMValue* args, int* type_codes, int num_args, TVMRetValueHandle ret, void* resource_handle) {
+  TVMValue ret_val;
+  ret_val.v_handle = NULL;
+  int type_code = kTVMNullptr;
+
+  if (num_args != 3 ||
+      type_codes[0] != kTVMModuleHandle ||
+      type_codes[1] != kTVMStr ||
+      type_codes[2] != kDLInt) {
+    TVMCFuncSetReturn(ret, &ret_val, &type_code, 1);
+  }
+
+  TVMModuleHandle mod = (TVMModuleHandle) args[0].v_handle;
+  const char* name = args[1].v_str;
+  int query_imports = (int) args[2].v_int64;
+
+  TVMModGetFunction(mod, name, query_imports, &ret_val.v_handle);
+  fprintf(stderr, "lookup func %s: %p\n", name, ret_val.v_handle);
+  if (ret_val.v_handle != NULL) {
+    type_code = kTVMPackedFuncHandle;
+  }
+  TVMCFuncSetReturn(ret, &ret_val, &type_code, 1);
   return 0;
 }
 
@@ -107,10 +146,11 @@ typedef struct TVMCReturnValue {
 int TVMFuncCall(TVMFunctionHandle func, TVMValue* arg_values, int* type_codes, int num_args,
                 TVMValue* ret_val, int* ret_type_code) {
   TVMPackedCFunc cfunc = (TVMPackedCFunc) func;
+  fprintf(stderr, "call func: %p\n", cfunc);
   TVMCReturnValue ret_val_struct;
   ret_val_struct.ret_val = ret_val;
   ret_val_struct.ret_type_code = ret_type_code;
-  cfunc(arg_values, type_codes, num_args, &ret_val_struct, NULL);
+  cfunc(arg_values, type_codes, num_args, &ret_val, ret_type_code);
   return 0;
 }
 
@@ -140,6 +180,7 @@ int TVMModFree(TVMModuleHandle mod ) {
 static TVMMutableFuncRegistry global_func_registry;
 
 int TVMFuncGetGlobal(const char* name, TVMFunctionHandle* out) {
+  fprintf(stderr, "get global func: %s\n", name);
   *out = (TVMFunctionHandle) TVMFuncRegistry_GetCFunction(&global_func_registry.reg, name);
   if (*out == NULL) {
     char msg[26 + TVM_CRT_MAX_STRLEN_FUNCTION_NAME];
@@ -156,10 +197,20 @@ int TVMFuncRegisterGlobal(const char* name, TVMFunctionHandle f, int override) {
 }
 
 int TVMInitializeRuntime() {
+  fprintf(stderr, "create registry\n");
   TVMMutableFuncRegistry_Create(&global_func_registry,
                                 vmalloc(TVM_CRT_GLOBAL_FUNC_REGISTRY_SIZE_BYTES),
                                 TVM_CRT_GLOBAL_FUNC_REGISTRY_SIZE_BYTES);
+  fprintf(stderr, "reg global\n");
+  int error = TVMFuncRegisterGlobal("runtime.SystemLib", &SystemLibraryCreate, 0);
+  if (error != 0) {
+    return error;
+  }
 
-  TVMFuncRegisterGlobal("runtime.SystemLib", &SystemLibraryCreate, 0);
+  error = TVMFuncRegisterGlobal("tvm.rpc.server.ModuleGetFunction", &ModuleGetFunction, 0);
+  if (error != 0) {
+    return error;
+  }
+
   return 0;
 }

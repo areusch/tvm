@@ -16,7 +16,10 @@
 # under the License.
 """MicroTVM module for bare-metal backends"""
 
+from .artifact import Artifact
+from .build import build_static_runtime, Workspace
+from .compiler import Compiler, DefaultCompiler, Flasher
 from .micro_library import MicroLibrary
 from .micro_binary import MicroBinary
-from .compiler import Compiler, DefaultCompiler, Flasher
-from .transport import transport_context_manager
+from .session import Session
+from .transport import TransportLogger, SerialTransport, SubprocessTransport

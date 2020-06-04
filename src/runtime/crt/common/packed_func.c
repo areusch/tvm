@@ -23,6 +23,7 @@
  */
 
 #include "packed_func.h"
+#include "logging.h"
 
 DLDataType String2DLDataType(const char* s) {
   DLDataType t;
@@ -128,12 +129,14 @@ static int strcmp_cursor(const char** cursor, const char* name) {
 }
 
 
-TVMPackedCFunc TVMFuncRegistry_GetCFunction(TVMFuncRegistry* reg, const char* name) {
+TVMPackedCFunc TVMFuncRegistry_GetCFunction(const TVMFuncRegistry* reg, const char* name) {
   size_t idx;
   const char* reg_name_ptr;
 
   idx = 0;
+  fprintf(stderr, "getcfunc: start %02x\n", *reg->names);
   for (reg_name_ptr = reg->names; *reg_name_ptr; reg_name_ptr++) {
+    fprintf(stderr, "getcfunc: compare %s v %s\n", reg_name_ptr, name);
     if (!strcmp_cursor(&reg_name_ptr, name)) {
       return reg->funcs[idx];
     }
@@ -144,7 +147,7 @@ TVMPackedCFunc TVMFuncRegistry_GetCFunction(TVMFuncRegistry* reg, const char* na
   return NULL;
 }
 
-int TVMFuncRegistry_GetPackedFunc(TVMFuncRegistry* reg, const char* name, TVMPackedFunc* func) {
+int TVMFuncRegistry_GetPackedFunc(const TVMFuncRegistry* reg, const char* name, TVMPackedFunc* func) {
   int return_value = 0;
 
   memset(func, 0, sizeof(*func));
@@ -161,6 +164,7 @@ int TVMFuncRegistry_GetPackedFunc(TVMFuncRegistry* reg, const char* name, TVMPac
 }
 
 void TVMMutableFuncRegistry_Create(TVMMutableFuncRegistry* reg, uint8_t* buffer, size_t buffer_size_bytes) {
+  fprintf(stderr, "create reg %p %p %ld\n", reg, buffer, buffer_size_bytes);
   memset(reg, 0, sizeof(*reg));
   reg->reg.names = (const char*) buffer;
   buffer[0] = 0;
@@ -169,10 +173,10 @@ void TVMMutableFuncRegistry_Create(TVMMutableFuncRegistry* reg, uint8_t* buffer,
   //  - assume average function name is around ~10 bytes
   //  - 1 byte for \0
   //  - size of 1 function pointer
-  // round (down) to sizeof 1 function pointer, so that the pointers are aligned when buffer is aligned.
-  size_t names_size_bytes = (buffer_size_bytes / (10 + 2 + sizeof(void*))) / sizeof(void*) * sizeof(void*);
-  reg->max_functions = (buffer_size_bytes - names_size_bytes) / sizeof(void*);
-  reg->reg.funcs = (TVMPackedCFunc*) (buffer + names_size_bytes);
+  size_t one_entry_size_bytes = 10 + 1 + sizeof(void*);
+  reg->max_functions = buffer_size_bytes / one_entry_size_bytes;
+  reg->reg.funcs = (TVMPackedCFunc*) (buffer + buffer_size_bytes - reg->max_functions * sizeof(void*));
+  fprintf(stderr, "max_functions %d\n", reg->max_functions);
 }
 
 int TVMMutableFuncRegistry_Set(TVMMutableFuncRegistry* reg, const char* name, TVMPackedCFunc func,
@@ -196,14 +200,20 @@ int TVMMutableFuncRegistry_Set(TVMMutableFuncRegistry* reg, const char* name, TV
   }
 
   size_t name_len = strlen(name);
+  fprintf(stderr, "index %d max %d; ptr %p vs %p\n", idx, reg->max_functions, reg_name_ptr, reg->reg.funcs);
   if (idx > reg->max_functions || (reg_name_ptr + name_len) > ((const char*) reg->reg.funcs)) {
     return -1;
   }
 
+  fprintf(stderr, "mutable_func_registry_set %p -> %s", reg_name_ptr, name);
   strcpy(reg_name_ptr, name);
   reg_name_ptr += name_len + 1;
   *reg_name_ptr = 0;
   reg->reg.funcs[idx] = func;
 
   return 0;
+}
+
+void TVMModule_GetFunction(const struct TVMModule* mod, const char* name, struct TVMPackedFunc* pf) {
+  TVMFuncRegistry_GetPackedFunc(&mod->registry, name, pf);
 }

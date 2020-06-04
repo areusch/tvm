@@ -1,3 +1,7 @@
+from .base import _rpc_connect
+from ..rpc import RPCSession
+from .transport import TransportLogger
+
 
 class Session:
     """MicroTVM Device Session
@@ -18,7 +22,8 @@ class Session:
           micro_mod = sess.create_micro_mod(c_mod)
     """
 
-    def __init__(self, binary=None, flasher=None, transport_context_manager=None):
+    def __init__(self, binary=None, flasher=None, transport_context_manager=None,
+                 session_name='micro-rpc'):
         """Configure a new session.
 
         Parameters
@@ -29,19 +34,18 @@ class Session:
         flasher : Flasher
             If given, `binary` must also be given. Used to flash `binary` during session
             initialization.
-        transport_context_manager : transport.TransportContextManager
+        transport_context_manager : ContextManager[transport.Transport]
             If given, `flasher` and `binary` should not be given. On entry, this context manager
             should establish a tarnsport between this TVM instance and the device.
+        session_name : str
+            Name of the session, used for debugging.
         """
         self.binary = binary
         self.flasher = flasher
         self.transport_context_manager = transport_context_manager
-        self.transport = None
+        self.session_name = session_name
 
         self._rpc = None
-        self._c_module = _CreateSession()
-        self._rpc_connect = self._c_module["rpc_connect"]
-        self._rpc_disconnect = self._c_module["rpc_disconnect"]
 
     def __enter__(self):
         """Initialize this session and establish an RPC session with the on-device RPC server.
@@ -52,81 +56,15 @@ class Session:
             Returns self.
         """
         if self.flasher is not None:
-            self.flasher.Flash(self.binary)
+            self.transport_context_manager = self.flasher.Flash(self.binary)
 
-        self.transport = self.transport_context_manager.__enter__()
-        self._rpc = self._rpc_connect(self.transport.read, self.transport.write)
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        """Tear down this session and associated RPC session resources."""
-        self._rpc_disconnect()
-
-
-       # TODO(weberlo): add config validation
-
-        # grab a binutil instance from the ID in the config
-        dev_funcs = tvm.micro.device.get_device_funcs(config["device_id"])
-        self.toolchain_prefix = config["toolchain_prefix"]
-        self.mem_layout = config["mem_layout"]
-        self.word_size_bits = config["word_size_bits"]
-        self.thumb_mode = config["thumb_mode"]
-        self.use_device_timer = config["use_device_timer"]
-        self.comms_method = config["comms_method"]
-
-        # First, find and compile runtime library.
-        runtime_src_path = os.path.join(get_micro_host_driven_dir(), "utvm_runtime.c")
-        tmp_dir = _util.tempdir()
-        runtime_obj_path = tmp_dir.relpath("utvm_runtime.obj")
-        options = ["-I{}".format(get_micro_host_driven_dir())]
-        dev_funcs["create_micro_lib"](
-            runtime_obj_path, runtime_src_path, LibType.RUNTIME, options=options)
-
-        comms_method = config["comms_method"]
-        if comms_method == "openocd":
-            server_addr = config["server_addr"]
-            server_port = config["server_port"]
-        elif comms_method == "host":
-            server_addr = ""
-            server_port = 0
-        else:
-            raise RuntimeError(f"unknown communication method: f{self.comms_method}")
-
-        assert all(map(lambda sec: sec in self.mem_layout, DEVICE_SECTIONS)), \
-            "not all sections have an assigned memory layout"
-        self.module = _CreateSession(
-            comms_method,
-            runtime_obj_path,
-            self.toolchain_prefix,
-            self.mem_layout["text"].get("start", 0),
-            self.mem_layout["text"]["size"],
-            self.mem_layout["rodata"].get("start", 0),
-            self.mem_layout["rodata"]["size"],
-            self.mem_layout["data"].get("start", 0),
-            self.mem_layout["data"]["size"],
-            self.mem_layout["bss"].get("start", 0),
-            self.mem_layout["bss"]["size"],
-            self.mem_layout["args"].get("start", 0),
-            self.mem_layout["args"]["size"],
-            self.mem_layout["heap"].get("start", 0),
-            self.mem_layout["heap"]["size"],
-            self.mem_layout["workspace"].get("start", 0),
-            self.mem_layout["workspace"]["size"],
-            self.mem_layout["stack"].get("start", 0),
-            self.mem_layout["stack"]["size"],
-            self.word_size_bits,
-            self.thumb_mode,
-            self.use_device_timer,
-            server_addr,
-            server_port,
-            config.get("debug_func"))
-        self._enter = self.module["enter"]
-        self._exit = self.module["exit"]
-        self.get_last_batch_time = self.module["get_last_batch_time"]
-        self.get_last_batch_cycles = self.module["get_last_batch_cycles"]
-
-    def __enter__(self):
-        self._enter()
+        self.transport = TransportLogger(
+            self.session_name, self.transport_context_manager).__enter__()
+        self._rpc = RPCSession(_rpc_connect(
+            self.session_name, self.transport.write, self.transport.read))
+        self.context = self._rpc.cpu(0)
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self._exit()
+        """Tear down this session and associated RPC session resources."""
+        self.transport.__exit__(exc_type, exc_value, exc_traceback)

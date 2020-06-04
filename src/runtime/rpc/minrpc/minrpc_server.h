@@ -99,6 +99,7 @@ class MinRPCServer {
 
     allow_clean_shutdown_ = false;
 
+    fprintf(stderr, "ProcessOnePacket code=%s\n", RPCCodeToString(code));
     if (code >= RPCCode::kSyscallCodeStart) {
       this->HandleSyscallFunc(code);
     } else {
@@ -130,6 +131,7 @@ class MinRPCServer {
       }
     }
 
+    fprintf(stderr, "return from ProcessPacket\n");
     return true;
   }
 
@@ -455,6 +457,7 @@ class MinRPCServer {
 
   template <typename T>
   void ReadArray(T* data, size_t count) {
+    fprintf(stderr, "read array %u\n", count);
     static_assert(std::is_pod<T>::value, "need to be trival");
     return this->ReadRawBytes(data, sizeof(T) * count);
   }

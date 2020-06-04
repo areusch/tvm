@@ -28,9 +28,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <tvm/runtime/c_runtime_api.h>
+#include <tvm/runtime/crt/func_registry.h>
+#include <tvm/runtime/crt/module.h>
 
 #include "crt_config.h"
-#include "module.h"
 
 DLDataType String2DLDataType(const char* s);
 
@@ -50,15 +51,7 @@ typedef struct TVMPackedFunc {
   void (*SetArgs)(struct TVMPackedFunc* pf, const struct TVMArgs* args);
 } TVMPackedFunc;
 
-typedef struct TVMFuncRegistry {
-  /*! \brief Names of registered functions, concatenated together and separated by \0.
-   * An additional \0 is present at the end of the concatenated blob to mark the end.
-   */
-  const char* names;
-
-  /*! \brief Function pointers, in the same order as their names in `names`. */
-  TVMPackedCFunc* funcs;
-} TVMFuncRegistry;
+// NOTE: TVMFuncRegistry defined in <tvm/runtime/crt/func_registry.h>
 
 /*!
  * \brief Get packed function from registry by name.
@@ -67,17 +60,17 @@ typedef struct TVMFuncRegistry {
  * \param name The function name
  * \return A non-NULL function pointer if a match was found. NULL otherwise.
  */
-TVMPackedCFunc TVMFuncRegistry_GetCFunction(TVMFuncRegistry* reg, const char* name);
+TVMPackedCFunc TVMFuncRegistry_GetCFunction(const TVMFuncRegistry* reg, const char* name);
 
 /*!
- * \brief Populate TVMPackedFunc from registry by name.
+n * \brief Populate TVMPackedFunc from registry by name.
  *
  * \param name The name of the function.
  * \param pf The result function. This function will populate a no-op PackedFUnc if the function
  *     name does not exist.
  * \return 0 if the function was found, -1 otherwise.
  */
-int TVMFuncRegistry_GetPackedFunc(TVMFuncRegistry* reg, const char* name, TVMPackedFunc* func);
+int TVMFuncRegistry_GetPackedFunc(const TVMFuncRegistry* reg, const char* name, TVMPackedFunc* func);
 
 typedef struct TVMMutableFuncRegistry {
   TVMFuncRegistry reg;

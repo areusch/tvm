@@ -18,47 +18,46 @@
  */
 
 /*!
- * \file micro_library.h
- * \brief Defines the MicroLibrary class.
+ * \file src/runtime/crt/module.h
+ * \brief Runtime container of the functions
  */
-#ifndef TVM_RUNTIME_MICRO_MICRO_LIBRARY_H_
-#define TVM_RUNTIME_MICRO_MICRO_LIBRARY_H_
+#ifndef TVM_RUNTIME_CRT_MODULE_H_
+#define TVM_RUNTIME_CRT_MODULE_H_
 
-#include <tvm/runtime/object.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace tvm {
-namespace runtime {
+#include <string.h>
+#include <tvm/runtime/c_runtime_api.h>
+#include <tvm/runtime/crt/func_registry.h>
 
-class MicroLibrary : public ObjectRef {
- public:
-  MicroLibrary() {}
-  explicit MicroLibrary(ObjectRef<Object> n) : ObjectRef(n) {}
+struct TVMPackedFunc;
 
+/*!
+ * \brief Module container of TVM.
+ */
+typedef struct TVMModule {
   /*!
    * \brief Get packed function from current module by name.
    *
    * \param name The name of the function.
-   * \param query_imports Whether also query dependency modules.
-   * \return The result function.
+   * \param pf The result function.
+   *
    *  This function will return PackedFunc(nullptr) if function do not exist.
-   * \note Implemented in packed_func.cc
    */
-  inline PackedFunc GetFunction(const std::string& name, bool query_imports = false);
+  void (*GetFunction)(const struct TVMModule* mod, const char* name, struct TVMPackedFunc* pf);
 
-  using ContainerType = MicroLibraryNode;
-  friend class MicroLibraryNode;
-};
+  TVMFuncRegistry registry;
+} TVMModule;
 
-class MicroLibraryNode : public Object {
- public:
-  /*! \brief The library file, encoded as ELF. */
-  std::string elf_data;
+void TVMModule_GetFunction(const struct TVMModule* mod, const char* name, struct TVMPackedFunc* pf);
 
-  /*! \brief The names of callable tasks in this library. */
-  std::vector<string> task_names;
-};
+/*! \brief Entry point for the system lib module. */
+const TVMModule* TVMSystemLibEntryPoint(void);
 
-}  // namespace runtime
-}  // namespace tvm
-
+#ifdef __cplusplus
+}
 #endif
+
+#endif  // TVM_RUNTIME_CRT_MODULE_H_

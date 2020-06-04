@@ -137,7 +137,7 @@ runtime::Module SourceModuleCreate(std::string code, std::string fmt);
  * \param code The code to be viewed.
  * \param fmt The code. format.
  */
-runtime::Module CSourceModuleCreate(std::string code, std::string fmt);
+runtime::Module CSourceModuleCreate(std::string code, std::string fmt, std::string target);
 
 /*!
  * \brief Create a source module for viewing and limited saving for device.

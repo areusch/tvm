@@ -136,26 +136,14 @@ class MbedCompiler(tvm.micro.Compiler):
     assert all(x == src_dir for x in all_dirnames[1:]), (
       'mBED compiler wants libraries built only from files in a single directory')
 
-    if not self._CanCompileInPlace(objects):
-      temp_dir = util.tempdir()
-      src_dir = temp_dir.temp_dir
-      build_dir = temp_dir.relpath('build')
-      for obj in objects:
-        dest = os.path.join(temp_dir.temp_dir, os.path.basename(obj))
-        shutil.copy(obj, dest)
-
-    else:
-      build_dir = util.tempdir().temp_dir
-
-    args = ['compile', '--library', '--source', src_dir, ]
-    artifact_name = os.path.splitext(os.path.basename(output))[0]
-    args.extend(['--build', os.path.realpath(build_dir), '-N', artifact_name])
+    args = ['compile', '--library', '--source', src_dir]
+    artifact_name = os.path.basename(output)
+    args.extend(['--build', output, '-N', artifact_name])
     if options:
       args += self._OptionsToArgs(options)
 
     self._invoke_mbed(args)
-    shutil.copy2(os.path.join(os.path.realpath(build_dir), f'lib{artifact_name}.a'),
-                 output)
+    return tvm.micro.MicroLibrary(output, [f'lib{artifact_name}.a'])
 
   IMAGE_RE = re.compile('^Image: ./(.*)$', re.MULTILINE)
 
@@ -168,33 +156,39 @@ class MbedCompiler(tvm.micro.Compiler):
         os.unlink(f)
 
     for obj in objects:
-      obj_base = os.path.basename(obj)
-      if obj_base.endswith('.a'):
-        dest = os.path.join(self._project_dir, f'libtvm__{obj_base}')
-      else:
-        dest = os.path.join(self._project_dir, f'__tvm_{obj_base}')
+      for lib_file in obj.library_files:
+        obj_base = os.path.basename(lib_file)
+        if obj_base.endswith('.a'):
+          dest = os.path.join(self._project_dir, f'libtvm__{obj_base}')
+        else:
+          dest = os.path.join(self._project_dir, f'__tvm_{obj_base}')
 
-      shutil.copy(obj, dest)
+        shutil.copy(obj.abspath(lib_file), dest)
 
     args = ['compile', '--source', '.']
     if options:
       args += self._OptionsToArgs(options)
 
-    artifact_name = os.path.splitext(os.path.basename(output))[0]
+    artifact_name = os.path.basename(output)
     args += ['-N', artifact_name]
 
-    build_dir = util.tempdir()
-    args += ['--build', build_dir.temp_dir]
+    args += ['--build', output]
     self._invoke_mbed(args)
-    elf_path = os.path.join(build_dir.temp_dir, f'{artifact_name}.elf')
 
-    shutil.copy(elf_path, output)
+    return tvm.micro.MicroBinary(os.path.join(output, f'{artifact_name}.bin'),
+                                 [os.path.join(output, f'{artifact_name}.elf')])
 
   def Flasher(self, target_serial_number=None):
     return Flasher(self._mbed_target, target_serial_number)
 
   def _invoke_mbed(self, args):
-    return subprocess.check_output(self._mbed_tool_entrypoint + args, cwd=self._project_dir)
+    try:
+      return subprocess.check_output(self._mbed_tool_entrypoint + args,
+                                     stderr=subprocess.STDOUT, cwd=self._project_dir)
+    except subprocess.CalledProcessError as e:
+      logger.error('%s: process exited with code %d. Stdio: \n%s',
+                   ' '.join(e.cmd), e.returncode, str(e.output, 'utf-8'))
+      raise e
 
 
 class Flasher(tvm.micro.Flasher):
@@ -221,8 +215,8 @@ class Flasher(tvm.micro.Flasher):
     return True
 
   def Flash(self, micro_binary):
-    print('flashing', micro_binary)
+    bin_file = [x for x in micro_binary if x.endswith('.bin')][0]
+    print('flashing', bin_file)
     mbed_os_tools.test.host_tests_toolbox.flash_dev(
-        self._devices[0]['mount_point'], micro_binary, program_cycle_s=4)
-    return tvm.micro.transport.transport_context_manager(
-      tvm.micro.transport.SerialTransport, self._devices[0]['serial_port'], baudrate=115200)
+        self._devices[0]['mount_point'], bin_file, program_cycle_s=4)
+    return tvm.micro.SerialTransport(self._devices[0]['serial_port'], baudrate=115200)

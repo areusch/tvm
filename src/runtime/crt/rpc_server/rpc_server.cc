@@ -23,12 +23,15 @@
  */
 
 #include <inttypes.h>
+#include <cstdio>
 #include <stdlib.h>
 
 #include "dmlc/base.h"
 #define DMLC_CMAKE_LITTLE_ENDIAN DMLC_IO_USE_LITTLE_ENDIAN
 #include <tvm/runtime/c_runtime_api.h>
 #include <tvm/runtime/crt/memory.h>
+#include <tvm/runtime/crt/module.h>
+#include <tvm/runtime/crt/platform.h>
 #include <tvm/runtime/micro/micro_rpc_server.h>
 
 #include "crt_config.h"
@@ -114,8 +117,8 @@ class MicroIOHandler {
     for (;;) ;
   }
 
-  const Buffer& receive_buffer() const {
-    return receive_buffer_;
+  Buffer* receive_buffer() {
+    return &receive_buffer_;
   }
 
  private:
@@ -141,9 +144,11 @@ class MicroRPCServer {
    * been received.
    */
   bool Loop() {
-    const Buffer& buf = io.receive_buffer();
-    if (rpc_server.HasCompletePacket(buf.Data(), buf.Size())) {
-      return rpc_server.ProcessOnePacket();
+    Buffer* buf = io.receive_buffer();
+    if (rpc_server.HasCompletePacket(buf->Data(), buf->Size())) {
+      bool to_return = rpc_server.ProcessOnePacket();
+      buf->Clear();
+      return to_return;
     }
 
     return true;
@@ -155,8 +160,15 @@ class MicroRPCServer {
 
 extern "C" {
 
-utvm_rpc_server_t utvm_rpc_server_init(utvm_rpc_channel_write_t write_func, void* write_func_ctx) {
-  TVMInitializeRuntime();
+utvm_rpc_server_t utvm_rpc_server_init(uint8_t* memory, size_t memory_size_bytes, size_t page_size_bytes_log2,
+                                       utvm_rpc_channel_write_t write_func, void* write_func_ctx) {
+  fprintf(stderr, "init mem\n");
+  MemoryManagerCreate(memory, memory_size_bytes, page_size_bytes_log2);
+  fprintf(stderr, "init runtime\n");
+  if (TVMInitializeRuntime() != 0) {
+    TVMPlatformAbort(-1);
+  }
+  fprintf(stderr, "alloc rpc server\n");
   return static_cast<utvm_rpc_server_t>(
     new (vmalloc(sizeof(tvm::runtime::MicroRPCServer))) tvm::runtime::MicroRPCServer(
       write_func, write_func_ctx));

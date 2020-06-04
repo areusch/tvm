@@ -72,9 +72,11 @@ typedef struct PageTable {
 } PageTable;
 
 void PageTable_Resize(struct PageTable* ptable, size_t new_size, Page* page) {
-  CHECK_LE(ptable->num_pages, new_size, "size value (%d) is smaller than expected (%d).", new_size,
+  fprintf(stderr, "ptable resize!\n");
+  CHECK_LE(ptable->num_pages, new_size, "size value (%zu) is smaller than expected (%zu).", new_size,
            ptable->num_pages);
   for (uint32_t idx = ptable->num_pages; idx < new_size; idx++) {
+    fprintf(stderr, "ptable resize: %p %u %zu\n", ptable->page, idx, new_size);
     ptable->page[idx] = *page;
   }
   ptable->num_pages = new_size;
@@ -206,6 +208,7 @@ typedef struct MemoryManager {
  * \return The virtual address
  */
 void* MemoryManager_Alloc(MemoryManager* mgr, tvm_index_t size) {
+  fprintf(stderr, "alloc %p %lld\n", mgr, size);
   uint8_t* data = 0;
   PageTable* ptable = &(mgr->ptable);
   tvm_index_t npage = (size + ptable->page_size_bytes - 1) / ptable->page_size_bytes;
@@ -213,6 +216,7 @@ void* MemoryManager_Alloc(MemoryManager* mgr, tvm_index_t size) {
   IndexedEntry* it = free_map->lower_bound(free_map, npage);
   tvm_index_t start = 0;
   if (it != free_map->end(free_map)) {
+    fprintf(stderr, "not at end!\n");
     Page p = it->page;
     free_map->erase(free_map, it);
     data = p.data;
@@ -224,12 +228,15 @@ void* MemoryManager_Alloc(MemoryManager* mgr, tvm_index_t size) {
              "insufficient memory, start=%" PRId64 ", npage=%" PRId64 ", total=%" PRId64 "", start,
              npage, start + npage);
     /* insert page entry */
+    fprintf(stderr, "at end! page create %p %zu %lld %lld\n", ptable->memory_pool, ptable->page_size_bytes, start, npage);
     Page p = PageCreate(ptable->memory_pool, ptable->page_size_bytes, start, npage);
     ptable->resize(ptable, start + npage, &p);
     data = p.data;
+    fprintf(stderr, "TLB\n");
     TLB* pmap = &(mgr->pmap);
     pmap->set(pmap, data, &p);
   }
+  fprintf(stderr, "done %p\n", data);
   vleak_size++;
 #if TVM_CRT_DEBUG > 1
   printf("allocate: addr=%p, start=%d/%d, npage=%d, vleak=%d\n", data, start, ptable->max_pages,
@@ -346,7 +353,7 @@ MemoryManager* MemoryManagerCreate(uint8_t* memory_pool,
     TVMPlatformAbort(-1);
   }
 
-  size_t num_pages = memory_pool_size_bytes >> page_size_bytes_log2;
+  size_t num_pages = memory_pool_size_bytes / ((1 << page_size_bytes_log2) + sizeof(Page) + sizeof(PageEntry));
 
   memset(&g_memory_manager, 0, sizeof(MemoryManager));
   memset(memory_pool, 0, sizeof(memory_pool_size_bytes));
@@ -355,12 +362,22 @@ MemoryManager* MemoryManagerCreate(uint8_t* memory_pool,
   g_memory_manager.Alloc = MemoryManager_Alloc;
   g_memory_manager.Realloc = MemoryManager_Realloc;
   g_memory_manager.Free = MemoryManager_Free;
+
   /* handle PageTable member functions */
-  g_memory_manager.ptable.memory_pool = memory_pool;
+  g_memory_manager.ptable.page = memory_pool;
+
+  // Allocate enough space for MAX_PAGES.
+  size_t metadata_num_pages =
+    ((sizeof(Page) + sizeof(PageEntry)) * num_pages + ((1 << page_size_bytes_log2) - 1)) >> page_size_bytes_log2;
+  fprintf(stderr, "metadata # pages: %d\n", metadata_num_pages);
+  g_memory_manager.ptable.memory_pool = memory_pool + (metadata_num_pages << page_size_bytes_log2);
+
   g_memory_manager.ptable.page_size_bytes = (1 << page_size_bytes_log2);
   g_memory_manager.ptable.max_pages = num_pages;
   g_memory_manager.ptable.resize = PageTable_Resize;
   /* handle TLB member functions */
+  g_memory_manager.pmap.entries = memory_pool + (sizeof(Page) * num_pages);
+
   g_memory_manager.pmap.set = TLB_Set;
   g_memory_manager.pmap.find = TLB_Find;
   /* handle free_map member functions */

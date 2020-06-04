@@ -59,8 +59,21 @@ using PosixMinRPCServer = MinRPCServer<PosixIOHandler>;
 }  // namespace runtime
 }  // namespace tvm
 
+extern "C" {
+  __attribute__((weak)) const TVMModule* TVMSystemLibEntryPoint(void) {}
+
+(const TVMModule*)* system_lib;
+
+int GetSystemLib(TVMValue* args, int* type_codes, int num_args, TVMRetValueHandle ret, void* resource_handle) {
+  TVMCFuncSetReturn(ret, *system_lib, kTVMModuleHandle, 1);
+}
+
+}
+
 int main(int argc, char* argv[]) {
   if (argc != 3) return -1;
+  TVMInitializeRuntime();
+  *system_lib = TVMSystemLibEntryPoint();
   // pass the descriptor via arguments.
   tvm::runtime::PosixIOHandler handler(atoi(argv[1]), atoi(argv[2]));
   tvm::runtime::PosixMinRPCServer server(&handler);

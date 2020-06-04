@@ -70,7 +70,7 @@ class CSourceModuleNode : public runtime::ModuleNode {
   CSourceModuleNode(std::string code, std::string fmt, Target target) :
       code_{code}, fmt_{fmt}, target_{target} {}
   const char* type_key() const {
-    return target_.is_micro_runtime() ? "micro-c" : "c";
+    return target_->is_micro_runtime() ? "micro-c" : "c";
   }
 
   PackedFunc GetFunction(const std::string& name, const ObjectPtr<Object>& sptr_to_self) final {
@@ -95,11 +95,11 @@ class CSourceModuleNode : public runtime::ModuleNode {
  protected:
   std::string code_;
   std::string fmt_;
-  std::string target_;
+  Target target_;
 };
 
-runtime::Module CSourceModuleCreate(std::string code, std::string fmt, Target target) {
-  auto n = make_object<CSourceModuleNode>(code, fmt, target);
+runtime::Module CSourceModuleCreate(std::string code, std::string fmt, std::string target_str) {
+  auto n = make_object<CSourceModuleNode>(code, fmt, Target::Create(target_str));
   return runtime::Module(n);
 }
 

@@ -278,7 +278,7 @@ runtime::Module BuildCHost(IRModule mod, std::string target_str) {
   }
 
   std::string code = cg.Finish();
-  return CSourceModuleCreate(code, "c");
+  return CSourceModuleCreate(code, "c", target_str);
 }
 
 TVM_REGISTER_GLOBAL("target.build.c").set_body([](TVMArgs args, TVMRetValue* rv) {

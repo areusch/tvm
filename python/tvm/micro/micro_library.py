@@ -1,14 +1,39 @@
 import tarfile
 
 from tvm.contrib import util
-from . import base
+from . import artifact
 from . import compiler
 
 
-class MicroLibrary(base.MicroObjectFileBase):
+class MicroLibrary(artifact.Artifact):
 
-  TAR_FILE_NAMES = dict(base.MicroObjectFileBase.TAR_FILE_NAMES.items())
-  TAR_FILE_NAMES['elf_data'] = '{tar_file_root}/{tar_file_root}.o'
+  ARTIFACT_TYPE = 'micro_library'
+
+  @classmethod
+  def from_unarchived(cls, base_dir, labelled_files, metadata):
+    library_files = labelled_files['library_files']
+    del labelled_files['library_files']
+
+    debug_files = None
+    if 'debug_files' in labelled_files:
+      debug_files = labelled_files['debug_files']
+      del labelled_files['debug_files']
+
+    return cls(base_dir, library_files, debug_files=debug_files, labelled_fiels=labelled_files,
+               metadata=metadata)
+
+  def __init__(self, base_dir, library_files, debug_files=None, labelled_files=None, metadata=None):
+    labelled_files = {} if labelled_files is None else dict(labelled_files)
+    metadata = {} if metadata is None else dict(metadata)
+    labelled_files['library_files'] = library_files
+    if debug_files is not None:
+      labelled_files['debug_files'] = debug_files
+
+    super(MicroLibrary, self).__init__(base_dir, labelled_files, metadata)
+
+    self.library_files = library_files
+    self.debug_file = debug_files
+
 
 
 def create_micro_library(output, objects, options=None):

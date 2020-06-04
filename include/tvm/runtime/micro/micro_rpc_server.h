@@ -53,7 +53,8 @@ typedef void* utvm_rpc_server_t;
  * \return A pointer to the TVM RPC Server. The pointer is allocated in the same memory space as
  *         the TVM workspace.
  */
-utvm_rpc_server_t utvm_rpc_server_init(utvm_rpc_channel_write_t write_func, void* write_func_ctx);
+utvm_rpc_server_t utvm_rpc_server_init(uint8_t* memory, size_t memory_size_bytes, size_t page_size_bytes_log2,
+                                       utvm_rpc_channel_write_t write_func, void* write_func_ctx);
 
 /*! \brief Copy received data into an internal buffer for processing.
  *
