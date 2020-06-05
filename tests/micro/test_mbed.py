@@ -15,8 +15,8 @@ def test_compile_runtime():
 #  target = tvm.target.target.micro('stm32f746xx')
   target = tvm.target.create('c -mcpu=x86-64')
 
-  A = tvm.te.placeholder((2,))
-  B = tvm.te.placeholder((1,))
+  A = tvm.te.placeholder((2,), dtype='int8')
+  B = tvm.te.placeholder((1,), dtype='int8')
   C = tvm.te.compute(A.shape, lambda i: A[i] + B[0], name='C')
 
   s = tvm.te.create_schedule(C.op)
@@ -49,15 +49,17 @@ def test_compile_runtime():
 
   micro_binary = tvm.micro.build_static_runtime(workspace, compiler, mod, lib_opts, bin_opts)
 
-  with tvm.micro.Session(binary=micro_binary, flasher=compiler.Flasher()) as sess:
-    A_data = tvm.nd.array([2, 3], ctx=sess.context)
-    B_data = tvm.nd.array([4], ctx=sess.context)
+  with tvm.micro.Session(binary=micro_binary, flasher=compiler.Flasher(debug=True)) as sess:
+    A_data = tvm.nd.array(numpy.array([2, 3], dtype='int8'), ctx=sess.context)
+    B_data = tvm.nd.array(numpy.array([4], dtype='int8'), ctx=sess.context)
+    C_data = tvm.nd.array(numpy.array([0, 0], dtype='int8'), ctx=sess.context)
 
     system_lib = sess._rpc.system_lib()
 #    system_lib_func = sess._rpc.get_function('get_system_lib')
 #    system_lib = system_lib_func()
     print('got system lib', system_lib)
-    C_data = system_lib.get_function('add')(A_data, B_data)
+    system_lib.get_function('add')(A_data, B_data, C_data)
+    print('got data!', C_data.asnumpy())
     assert C_data.asnumpy() == numpy.array([6, 7])
 
 

@@ -205,8 +205,8 @@ class DefaultCompiler(Compiler):
     binutil.run_cmd(args)
     return tvm.micro.MicroBinary(output, output_filename, [])
 
-  def Flasher(self):
-    return HostFlasher()
+  def Flasher(self, **kw):
+    return HostFlasher(**kw)
 
 
 class Flasher(metaclass=abc.ABCMeta):
@@ -231,5 +231,11 @@ class Flasher(metaclass=abc.ABCMeta):
 
 class HostFlasher(Flasher):
 
+  def __init__(self, debug=False):
+    self.debug = debug
+
   def Flash(self, micro_binary):
-    return transport.SubprocessTransport([micro_binary.abspath(micro_binary.binary_file)])
+    if self.debug:
+      return transport.DebugSubprocessTransport([micro_binary.abspath(micro_binary.binary_file)])
+    else:
+      return transport.SubprocessTransport([micro_binary.abspath(micro_binary.binary_file)])

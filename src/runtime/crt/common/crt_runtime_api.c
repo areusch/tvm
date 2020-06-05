@@ -91,16 +91,14 @@ int TVMSynchronize(int device_type, int device_id, TVMStreamHandle stream) {
 
 static const TVMModule* system_lib = NULL;
 
-int SystemLibraryCreate(TVMValue* args, int* type_codes, int num_args, TVMRetValueHandle ret, void* resource_handle) {
-  fprintf(stderr, "system lib create\n");
+int SystemLibraryCreate(TVMValue* args, int* type_codes, int num_args, TVMValue* ret_val, int* ret_type_codes) {
   if (system_lib == NULL) {
     system_lib = TVMSystemLibEntryPoint();
+    fprintf(stderr, "system lib create: %p\n", system_lib);
   }
 
-  TVMValue ret_val;
-  ret_val.v_handle = (void*) system_lib;
-  int type_code = kTVMModuleHandle;
-  TVMCFuncSetReturn(ret, &ret_val, &type_code, 1);
+  ret_val[0].v_handle = (void*) system_lib;
+  ret_type_codes[0] = kTVMModuleHandle;
   return 0;
 }
 
@@ -113,28 +111,26 @@ int TVMModGetFunction(TVMModuleHandle mod, const char* func_name, int query_impo
   return 0;
 }
 
-int ModuleGetFunction(TVMValue* args, int* type_codes, int num_args, TVMRetValueHandle ret, void* resource_handle) {
-  TVMValue ret_val;
-  ret_val.v_handle = NULL;
-  int type_code = kTVMNullptr;
-
+int32_t ModuleGetFunction(TVMValue* args, int* type_codes, int num_args, TVMValue* ret_value, int* ret_type_codes) {
+  ret_value[0].v_handle = NULL;
+  ret_type_codes[0] = kTVMNullptr;
   if (num_args != 3 ||
       type_codes[0] != kTVMModuleHandle ||
       type_codes[1] != kTVMStr ||
       type_codes[2] != kDLInt) {
-    TVMCFuncSetReturn(ret, &ret_val, &type_code, 1);
+    return 0;
   }
 
   TVMModuleHandle mod = (TVMModuleHandle) args[0].v_handle;
   const char* name = args[1].v_str;
   int query_imports = (int) args[2].v_int64;
 
-  TVMModGetFunction(mod, name, query_imports, &ret_val.v_handle);
-  fprintf(stderr, "lookup func %s: %p\n", name, ret_val.v_handle);
-  if (ret_val.v_handle != NULL) {
-    type_code = kTVMPackedFuncHandle;
+  fprintf(stderr, "mod get func: %p (v %p) %s %d\n", mod, system_lib, name, query_imports);
+  TVMModGetFunction(mod, name, query_imports, &(ret_value[0].v_handle));
+  fprintf(stderr, "lookup func %s: %p\n", name, ret_value[0].v_handle);
+  if (ret_value[0].v_handle != NULL) {
+    ret_type_codes[0] = kTVMPackedFuncHandle;
   }
-  TVMCFuncSetReturn(ret, &ret_val, &type_code, 1);
   return 0;
 }
 
@@ -145,12 +141,13 @@ typedef struct TVMCReturnValue {
 
 int TVMFuncCall(TVMFunctionHandle func, TVMValue* arg_values, int* type_codes, int num_args,
                 TVMValue* ret_val, int* ret_type_code) {
+  // Initialize return value, in case the function does not return anything.
+  ret_type_code[0] = kDLInt;
+  ret_val[0].v_int64 = kTVMNullptr;
   TVMPackedCFunc cfunc = (TVMPackedCFunc) func;
   fprintf(stderr, "call func: %p\n", cfunc);
   TVMCReturnValue ret_val_struct;
-  ret_val_struct.ret_val = ret_val;
-  ret_val_struct.ret_type_code = ret_type_code;
-  cfunc(arg_values, type_codes, num_args, &ret_val, ret_type_code);
+  cfunc(arg_values, type_codes, num_args, ret_val, ret_type_code);
   return 0;
 }
 

@@ -1,0 +1,139 @@
+import glob
+import logging
+import os
+import re
+from tvm.contrib import util
+
+
+_LOG = logging.getLogger(__name__)
+
+
+class Workspace:
+
+  def __init__(self, root=None, debug=False):
+    if debug or root is not None:
+      with util.TempDirectory.set_keep_for_debug():
+        self.tempdir = util.tempdir(custom_path=root)
+        _LOG.info('Created debug mode workspace at: %s', self.tempdir.temp_dir)
+    else:
+      self.tempdir = util.tempdir()
+
+  def relpath(self, path):
+    return self.tempdir.relpath(path)
+
+  def listdir(self):
+    return self.tempdir.listdir()
+
+  @property
+  def path(self):
+    return self.tempdir.temp_dir
+
+
+FUNC_RE = re.compile('^TVM_DLL int32_t ([^(]+)\(')
+
+
+def _generate_mod_wrapper(src_path):
+  funcs = []
+  with open(src_path) as src_f:
+    for line in src_f:
+      m = FUNC_RE.match(line)
+      if m:
+        funcs.append(m.group(1))
+
+  encoded_funcs = '\\0'.join(funcs)
+  lines = [
+      '#include <tvm/runtime/c_runtime_api.h>',
+      '#include <tvm/runtime/crt/module.h>',
+      '#include <stdio.h>',
+      '',
+      'static TVMFunctionHandle funcs[] = {',
+  ]
+  for f in funcs:
+    lines.append(f'    &{f},')
+  lines += [
+      '};',
+      'static const TVMModule system_lib = {',
+      '    &TVMModule_GetFunction,',
+      '    {\n',
+      f'       "{encoded_funcs}\\0",',
+      '        funcs,',
+      '    }',
+      '};',
+      '',
+      'const TVMModule* TVMSystemLibEntryPoint(void) {',
+      '    fprintf(stderr, "create system lib!! %p\\n", system_lib.registry.funcs[0]);',
+      '    return &system_lib;',
+      '}',
+      '',   # blank line to end the file
+  ]
+  with open(src_path, 'a') as wrapper_f:
+    wrapper_f.write('\n'.join(lines))
+
+
+RUNTIME_LIB_NAMES = ['common', 'rpc_server', 'host']
+
+
+RUNTIME_SRC_REGEX = re.compile('^.*\.cc?$', re.IGNORECASE)
+
+
+
+def build_static_runtime(workspace, compiler, module, lib_opts=None, bin_opts=None):
+  """Build the on-device runtime, statically linking the given modules.
+
+  Parameters
+  ----------
+  compiler : tvm.micro.Compiler
+      Compiler instance used to build the runtime.
+
+  module : IRModule
+      Module to statically link.
+
+  lib_opts : dict
+      Extra kwargs passed to Library(),
+
+  bin_opts : dict
+      Extra kwargs passed to Binary(),
+
+  Returns
+  -------
+  MicroBinary :
+      The compiled runtime.
+  """
+  lib_opts = {} if lib_opts is None else lib_opts
+  bin_opts = {} if bin_opts is None else bin_opts
+
+  crt_path = os.path.realpath(
+    os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src', 'runtime', 'crt'))
+
+  mod_build_dir = workspace.relpath(os.path.join('build', 'module'))
+  os.makedirs(mod_build_dir)
+  mod_src_dir = workspace.relpath(os.path.join('src', 'module'))
+  os.makedirs(mod_src_dir)
+  mod_src_path = os.path.join(mod_src_dir, 'module.c')
+  module.save(mod_src_path, 'cc')
+  print('ls', module)
+  os.system(f'ls {mod_src_dir}')
+
+#  mod_wrapper_path = os.path.join(mod_src_dir, 'module-wrapper.c')
+  _generate_mod_wrapper(mod_src_path)
+
+  libs = []
+  libs.append(compiler.Library(mod_build_dir, [mod_src_path], lib_opts))
+
+  crt_root_dir = os.path.realpath(os.path.join(
+    os.path.dirname(__file__), '..', '..', '..', 'src', 'runtime', 'crt'))
+  for lib_name in RUNTIME_LIB_NAMES:
+    lib_build_dir = workspace.relpath(f'build/{lib_name}')
+    os.makedirs(lib_build_dir)
+
+    lib_src_dir = os.path.join(crt_root_dir, lib_name)
+    lib_srcs = []
+    for p in os.listdir(lib_src_dir):
+      if RUNTIME_SRC_REGEX.match(p):
+        lib_srcs.append(os.path.join(lib_src_dir, p))
+
+    libs.append(compiler.Library(lib_build_dir, lib_srcs, lib_opts))
+
+  runtime_build_dir = workspace.relpath(f'build/runtime')
+  os.makedirs(runtime_build_dir)
+  return compiler.Binary(runtime_build_dir, libs, bin_opts)

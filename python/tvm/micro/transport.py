@@ -1,11 +1,14 @@
 import abc
 import contextlib
 import logging
-import serial
-import serial.tools.list_ports
+import os
+import signal
 import string
 import subprocess
 import typing
+
+import serial
+import serial.tools.list_ports
 
 
 _LOG = logging.getLogger(__name__)
@@ -138,20 +141,51 @@ class SubprocessTransport(Transport):
     self.kw['stdout'] = subprocess.PIPE
     self.kw['stdin'] = subprocess.PIPE
     self.popen = subprocess.Popen(self.args, **self.kw)
+    self.stdin = self.popen.stdin
+    self.stdout = self.popen.stdout
 
   def write(self, data):
-    self.popen.stdin.write(data)
-    self.popen.stdin.flush()
+    self.stdin.write(data)
+    self.stdin.flush()
 
   def read(self, n):
     data = bytearray()
     while len(data) < n:
-      data += self.popen.stdout.read(n)
+      data += self.stdout.read(n)
 
     return data
 
   def close(self):
-    self.popen.kill()
+    self.stdin.close()
+    self.stdout.close()
+    self.popen.terminate()
+
+
+class DebugSubprocessTransport(SubprocessTransport):
+
+  def open(self):
+    stdin_read, stdin_write = os.pipe()
+    stdout_read, stdout_write = os.pipe()
+    os.set_inheritable(stdin_read, True)
+    os.set_inheritable(stdout_write, True)
+    args = ['lldb',
+       '-O', f'target create {self.args[0]}',
+       '-O', f'settings set target.input-path /dev/fd/{stdin_read}',
+       '-O', f'settings set target.output-path /dev/fd/{stdout_write}']
+    if len(self.args) > 1:
+      args.extend(['-O', 'settings set target.run-args {}'.format(' '.join(self.args[1:]))])
+
+    self.old_signal = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    self.popen = subprocess.Popen(args, pass_fds=[stdin_read, stdout_write])
+
+    self.stdin = os.fdopen(stdin_write, 'wb', buffering=0)
+    self.stdout = os.fdopen(stdout_read, 'rb', buffering=0)
+
+  def close(self):
+    signal.signal(signal.SIGINT, self.old_signal)
+    self.stdin.close()
+    self.stdout.close()
+    self.popen.terminate()
 
 
 TransportContextManager = typing.ContextManager[Transport]
