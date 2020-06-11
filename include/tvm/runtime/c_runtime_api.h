@@ -296,7 +296,7 @@ TVM_DLL int TVMCbArgToReturn(TVMValue* value, int* code);
  * \param type_codes The type codes of the arguments
  * \param num_args Number of arguments.
  * \param ret The return value handle.
- * \param resource_handle The handle additional resouce handle from fron-end.
+
  * \return 0 if success, -1 if failure happens, set error via TVMAPISetLastError.
  * \sa TVMCFuncSetReturn
  */

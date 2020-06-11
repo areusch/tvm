@@ -19,7 +19,8 @@
 from .artifact import Artifact
 from .build import build_static_runtime, Workspace
 from .compiler import Compiler, DefaultCompiler, Flasher
+from .debugger import GdbRemoteDebugger
 from .micro_library import MicroLibrary
 from .micro_binary import MicroBinary
 from .session import Session
-from .transport import TransportLogger, SerialTransport, SubprocessTransport
+from .transport import TransportLogger, DebugWrapperTransport, SerialTransport, SubprocessTransport

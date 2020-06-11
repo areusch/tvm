@@ -18,37 +18,22 @@
  */
 
 /*!
- * \file tvm/runtime/crt/memory.h
- * \brief The virtual memory manager for micro-controllers
+ * \file tvm/runtime/crt/func_registry.h
+ * \brief Defines the function registry used by CRT modules.
  */
 
-#ifndef TVM_RUNTIME_CRT_PLATFORM_H_
-#define TVM_RUNTIME_CRT_PLATFORM_H_
+#ifndef TVM_RUNTIME_CRT_FUNC_REGISTRY_H_
+#define TVM_RUNTIME_CRT_FUNC_REGISTRY_H_
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/*! \brief Called when an internal error occurs and execution cannot continue.
- *
- * The platform should ideally restart or hang at this point.
- *
- * \param code An error code.
- */
-void __attribute__((noreturn)) TVMPlatformAbort(int code);
+#include <tvm/runtime/c_backend_api.h>
 
-/*! \brief Enter a critical section of code which is not thread-safe.
- *
- * The implementation should ensure that no other code (i.e. ISRs) can execute after this function
- * returns until TVMPlatformExitCriticalSection is called.
- */
-void TVMPlatformEnterCriticalSection();
-
-/*! \brief Exit a critical section of code. The inverse fo TVMPlatformEnterCriticalSection. */
-void TVMPlatformExitCriticalSection();
 
 #ifdef __cplusplus
 }  // extern "C"
 #endif
 
-#endif  // TVM_RUNTIME_CRT_PLATFORM_H_
+#endif  // TVM_RUNTIME_CRT_FUNC_REGISTRY_H_

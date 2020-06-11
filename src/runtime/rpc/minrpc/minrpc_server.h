@@ -60,6 +60,7 @@ namespace runtime {
  * \tparam TIOHandler IO provider to provide io handling.
  *         An IOHandler needs to provide the following functions:
  *         - PosixWrite, PosixRead, Close: posix style, read, write, close API.
+ *         - PacketStart(num_bytes), PacketDone(): framing APIs.
  *         - Exit: exit with status code.
  */
 template <typename TIOHandler>
@@ -70,16 +71,6 @@ class MinRPCServer {
    * \param io The IO handler.
    */
   explicit MinRPCServer(TIOHandler* io) : io_(io), arena_(PageAllocator(io)) {}
-
-  bool HasCompletePacket(const uint8_t* buffer, size_t buffer_size_bytes) {
-    uint64_t packet_len;
-    if (buffer_size_bytes < sizeof(packet_len)) {
-      return false;
-    }
-
-    memcpy(static_cast<void*>(&packet_len), buffer, sizeof(packet_len));
-    return buffer_size_bytes >= packet_len + sizeof(packet_len);
-  }
 
   /*! \brief Process a single request.
    *
@@ -205,9 +196,11 @@ class MinRPCServer {
       RPCCode code = RPCCode::kCopyAck;
       uint64_t packet_nbytes = sizeof(code) + num_bytes;
 
+      io_->PacketStart(packet_nbytes);
       this->Write(packet_nbytes);
       this->Write(code);
       this->WriteArray(data_ptr, num_bytes);
+      io_->PacketDone();
     } else {
       this->ReturnLastTVMError();
     }
@@ -521,10 +514,12 @@ class MinRPCServer {
 
     uint64_t packet_nbytes = sizeof(code) + sizeof(num_args) + sizeof(tcode);
 
+    io_->PacketStart(packet_nbytes);
     this->Write(packet_nbytes);
     this->Write(code);
     this->Write(num_args);
     this->Write(tcode);
+    io_->PacketDone();
   }
 
   void ReturnHandle(void* handle) {
@@ -536,11 +531,13 @@ class MinRPCServer {
     uint64_t packet_nbytes =
         sizeof(code) + sizeof(num_args) + sizeof(tcode) + sizeof(encode_handle);
 
+    io_->PacketStart(packet_nbytes);
     this->Write(packet_nbytes);
     this->Write(code);
     this->Write(num_args);
     this->Write(tcode);
     this->Write(encode_handle);
+    io_->PacketDone();
   }
 
   void ReturnException(const char* msg) { RPCReference::ReturnException(msg, this); }

@@ -117,7 +117,11 @@ class SerialTransport(Transport):
 
             port_path = ports[0].device
 
-        self._port = serial.Serial(port_path, **kw)
+        self._port = serial.Serial(port_path, **self._kw)
+        c = self._port.read(1)
+        while c != b'\n':
+          print('read', c)
+          c = self._port.read(1)
 
     def close(self):
         self._port.close()
@@ -127,7 +131,9 @@ class SerialTransport(Transport):
         return self._port.read(n)
 
     def write(self, data):
-        return self._port.write(data)
+        to_return = self._port.write(data)
+        self._port.flush()
+        return to_return
 
 
 class SubprocessTransport(Transport):
@@ -161,31 +167,30 @@ class SubprocessTransport(Transport):
     self.popen.terminate()
 
 
-class DebugSubprocessTransport(SubprocessTransport):
+class DebugWrapperTransport(Transport):
+
+  def __init__(self, debugger, transport):
+    self.debugger = debugger
+    self.transport = transport
 
   def open(self):
-    stdin_read, stdin_write = os.pipe()
-    stdout_read, stdout_write = os.pipe()
-    os.set_inheritable(stdin_read, True)
-    os.set_inheritable(stdout_write, True)
-    args = ['lldb',
-       '-O', f'target create {self.args[0]}',
-       '-O', f'settings set target.input-path /dev/fd/{stdin_read}',
-       '-O', f'settings set target.output-path /dev/fd/{stdout_write}']
-    if len(self.args) > 1:
-      args.extend(['-O', 'settings set target.run-args {}'.format(' '.join(self.args[1:]))])
+    self.debugger.Start()
 
-    self.old_signal = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    self.popen = subprocess.Popen(args, pass_fds=[stdin_read, stdout_write])
+    try:
+      self.transport.open()
+    except Exception:
+      self.debugger.Stop()
+      raise
 
-    self.stdin = os.fdopen(stdin_write, 'wb', buffering=0)
-    self.stdout = os.fdopen(stdout_read, 'rb', buffering=0)
+  def write(self, data):
+    return self.transport.write(data)
+
+  def read(self, n):
+    return self.transport.read(n)
 
   def close(self):
-    signal.signal(signal.SIGINT, self.old_signal)
-    self.stdin.close()
-    self.stdout.close()
-    self.popen.terminate()
+    self.transport.close()
+    self.debugger.Stop()
 
 
 TransportContextManager = typing.ContextManager[Transport]

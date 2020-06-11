@@ -17,39 +17,16 @@
 #ifndef MBED_CRC_API_H
 #define MBED_CRC_API_H
 
-#include "cmsis.h"
-#include "hal/crc_api.h"
-#ifdef DEVICE_CRC
-#include "device.h"
-#endif
-#include "platform/mbed_assert.h"
-
 #ifdef __cplusplus
 
-#include "platform/SingletonPtr.h"
-#include "platform/PlatformMutex.h"
+#include "crc_api.h"
 
-#ifdef UNITTEST
-#include <type_traits>
-#define MSTD_CONSTEXPR_IF_HAS_IS_CONSTANT_EVALUATED
-#else
-#include <mstd_type_traits>
-#endif
-
-namespace mbed {
-/** \addtogroup drivers-public-api */
-/** @{*/
-/**
- * \defgroup drivers_MbedCRC MbedCRC class
- * @{
- */
-
-extern SingletonPtr<PlatformMutex> mbed_crc_mutex;
+namespace tvm {
+namespace runtime {
 
 /** CRC mode selection
  */
 enum class CrcMode {
-    HARDWARE,   /// Use hardware (if available), else table-based computation
     TABLE,      /// Use table-based computation (if table available), else bitwise
     BITWISE     /// Always use bitwise manual computation
 };
@@ -75,9 +52,6 @@ constexpr bool have_crc_table(uint32_t polynomial, uint8_t width)
 constexpr CrcMode choose_crc_mode(uint32_t polynomial, uint8_t width, CrcMode mode_limit)
 {
     return
-#if DEVICE_CRC
-        mode_limit == CrcMode::HARDWARE && HAL_CRC_IS_SUPPORTED(polynomial, width) ? CrcMode::HARDWARE :
-#endif
         mode_limit <= CrcMode::TABLE && have_crc_table(polynomial, width) ? CrcMode::TABLE :
         CrcMode::BITWISE;
 }
@@ -85,19 +59,17 @@ constexpr CrcMode choose_crc_mode(uint32_t polynomial, uint8_t width, CrcMode mo
 
 } // namespace impl
 
-/** CRC object provides CRC generation through hardware or software
+/** CRC object provides CRC generation through software
  *
- *  CRC sums can be generated using three different methods: hardware, software ROM tables
+ *  CRC sums can be generated using two different methods: software ROM tables
  *  and bitwise computation. The mode used is normally selected automatically based on required
  *  polynomial and hardware capabilities. Any polynomial in standard form (`x^3 + x + 1`)
  *  can be used for computation, but custom ones can affect the performance.
  *
- *  First choice is the hardware mode. The supported polynomials are hardware specific, and
- *  you need to consult your MCU manual to discover them. Next, ROM polynomial tables
- *  are tried (you can find list of supported polynomials here ::crc_polynomial). If the selected
- *  configuration is supported, it will accelerate the software computations. If ROM tables
- *  are not available for the selected polynomial, then CRC is computed at run time bit by bit
- *  for all data input.
+ *  First choice is the ROM polynomial tables (you can find list of supported polynomials here
+ *  ::crc_polynomial). If the selected configuration is supported, it will accelerate the software
+ *  computations. If ROM tables are not available for the selected polynomial, then CRC is computed
+ *  at run time bit by bit for all data input.
  *
  *  If desired, the mode can be manually limited for a given instance by specifying the mode_limit
  *  template parameter. This might be appropriate to ensure a table is not pulled in for a
@@ -156,9 +128,6 @@ class MbedCRC  {
 public:
     /* Backwards compatibility */
     enum CrcMode {
-#if DEVICE_CRC
-        HARDWARE    = int(::mbed::CrcMode::HARDWARE),
-#endif
         TABLE       = int(::mbed::CrcMode::TABLE),
         BITWISE     = int(::mbed::CrcMode::BITWISE)
     };
@@ -388,20 +357,6 @@ public:
      */
     int32_t compute_partial_start(uint32_t *crc)
     {
-#if DEVICE_CRC
-        if (mode == CrcMode::HARDWARE) {
-            lock();
-            crc_mbed_config_t config;
-            config.polynomial  = polynomial;
-            config.width       = width;
-            config.initial_xor = _initial_value;
-            config.final_xor   = _final_xor;
-            config.reflect_in  = _reflect_data;
-            config.reflect_out = _reflect_remainder;
-
-            hal_crc_compute_partial_start(&config);
-        }
-#endif
 
         *crc = _initial_value;
         return 0;
@@ -418,13 +373,6 @@ public:
      */
     int32_t compute_partial_stop(uint32_t *crc)
     {
-#if DEVICE_CRC
-        if (mode == CrcMode::HARDWARE) {
-            *crc = hal_crc_get_result();
-            unlock();
-            return 0;
-        }
-#endif
         uint_fast32_t p_crc = *crc;
         if (mode == CrcMode::BITWISE) {
             if (_reflect_data) {
@@ -506,17 +454,10 @@ private:
      * @param  Register value to be reflected (full 32-bit value)
      * @return Reflected value (full 32-bit value)
      */
-#ifdef MSTD_HAS_IS_CONSTANT_EVALUATED
-    static constexpr uint32_t reflect(uint32_t data)
-    {
-        return mstd::is_constant_evaluated() ? reflect_constant(data) : __RBIT(data);
-    }
-#else
     static uint32_t reflect(uint32_t data)
     {
         return __RBIT(data);
     }
-#endif
 
     /** Data bytes may need to be reflected.
      *
@@ -585,22 +526,12 @@ private:
      */
     static void lock()
     {
-#if DEVICE_CRC
-        if (mode == CrcMode::HARDWARE) {
-            mbed_crc_mutex->lock();
-        }
-#endif
     }
 
     /** Release exclusive access to CRC hardware/software.
      */
     static void unlock()
     {
-#if DEVICE_CRC
-        if (mode == CrcMode::HARDWARE) {
-            mbed_crc_mutex->unlock();
-        }
-#endif
     }
 
     /** Get the CRC data mask.
@@ -824,21 +755,6 @@ private:
     }
 #endif
 
-#ifdef DEVICE_CRC
-    /** Hardware CRC computation.
-     *
-     * @param  buffer  data buffer
-     * @param  size  size of the data
-     * @return  0  on success or a negative error code on failure
-     */
-    template<CrcMode mode_ = mode>
-    std::enable_if_t<mode_ == CrcMode::HARDWARE, int32_t>
-    do_compute_partial(const uint8_t *data, crc_data_size_t size, uint32_t *) const
-    {
-        hal_crc_compute_partial(data, size);
-        return 0;
-    }
-#endif
 
 };
 
@@ -871,7 +787,8 @@ const uint32_t MbedCRC<POLY_32BIT_ANSI, 32, CrcMode::TABLE>::_crc_table[MBED_CRC
 /** @}*/
 /** @}*/
 
-} // namespace mbed
+} // namespace runtime
+} // namespace tvm
 
 #endif // __cplusplus
 

@@ -28,7 +28,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <tvm/runtime/c_runtime_api.h>
-#include <tvm/runtime/crt/func_registry.h>
 #include <tvm/runtime/crt/module.h>
 
 #include "crt_config.h"
@@ -51,29 +50,9 @@ typedef struct TVMPackedFunc {
   void (*SetArgs)(struct TVMPackedFunc* pf, const struct TVMArgs* args);
 } TVMPackedFunc;
 
-// NOTE: TVMFuncRegistry defined in <tvm/runtime/crt/func_registry.h>
-
-/*!
- * \brief Get packed function from registry by name.
- *
- * \param reg TVMFunctionRegistry instance that contains the function.
- * \param name The function name
- * \return A non-NULL function pointer if a match was found. NULL otherwise.
- */
-TVMPackedCFunc TVMFuncRegistry_GetCFunction(const TVMFuncRegistry* reg, const char* name);
-
-/*!
-n * \brief Populate TVMPackedFunc from registry by name.
- *
- * \param name The name of the function.
- * \param pf The result function. This function will populate a no-op PackedFUnc if the function
- *     name does not exist.
- * \return 0 if the function was found, -1 otherwise.
- */
-int TVMFuncRegistry_GetPackedFunc(const TVMFuncRegistry* reg, const char* name, TVMPackedFunc* func);
 
 typedef struct TVMMutableFuncRegistry {
-  TVMFuncRegistry reg;
+  TVMFuncRegistry registry;
 
   /*! \brief maximum number of functions in this registry. */
   size_t max_functions;
@@ -97,6 +76,6 @@ void TVMMutableFuncRegistry_Create(TVMMutableFuncRegistry* reg, uint8_t* buffer,
  * \param override non-zero if an existing entry should be overridden.
  * \return 0 if the function was set successfully, -1 if out of space.
  */
-int TVMMutableFuncRegistry_Set(TVMMutableFuncRegistry* reg, const char* name, TVMPackedCFunc func, int override);
+int TVMMutableFuncRegistry_Set(TVMMutableFuncRegistry* reg, const char* name, TVMBackendPackedCFunc func, int override);
 
 #endif  // TVM_RUNTIME_CRT_PACKED_FUNC_H_

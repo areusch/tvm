@@ -185,26 +185,18 @@ public:
     /** Peek into circular buffer without popping
      *
      * @param data Data to be peeked from the buffer
-     * @param peek_size_bytes Number of bytes to try to read from the buffer.
-     * @return Number of bytes actually read from the buffer.
+     * @return True if the buffer is not empty and data contains a transaction, false otherwise
      */
-    CounterType peek(T* data, CounterType peek_size_bytes) const
+    bool peek(T &data) const
     {
-        CounterType i = 0;
+        bool data_updated = false;
         TVMPlatformEnterCriticalSection();
         if (!empty()) {
-          CounterType cursor = tail_;
-          while (cursor != head_ && i < peek_size_bytes) {
-            data[i] = _pool[cursor];
-            i++;
-            cursor++;
-            if (cursor == BufferSize) {
-              cursor = 0;
-            }
-          }
+            data = _pool[_tail];
+            data_updated = true;
         }
         TVMPlatformExitCriticalSection();
-        return i;
+        return data_updated;
     }
 
 private:

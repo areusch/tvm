@@ -58,17 +58,15 @@ utvm_rpc_server_t utvm_rpc_server_init(uint8_t* memory, size_t memory_size_bytes
 
 /*! \brief Copy received data into an internal buffer for processing.
  *
- * This function is safe to invoke from an ISR. No packet processing will be done by this function;
- * however, be sure to call utvm_rpc_server_loop from the main loop soon after invoking this
- * function or the internal buffer will fill and this function will be unable to accept more data.
+ * Currently only handles 1 byte of data. In the future, the goal of this function is to be safe to invoke from
+ * an ISR. At that time, this function will just append to an internal buffer.
  *
  * \param server The TVM RPC Server pointer.
- * \param data Pointer to the received data.
- * \param data_size_bytes Number of valid bytes pointed to by data.
+ * \param byte The received byte of data.
  * \return The number of bytes copied to the internal buffer. May be less than data_size_bytes when
  * the internal buffer fills.
  */
-size_t utvm_rpc_server_receive_data(utvm_rpc_server_t server, const uint8_t* data, size_t data_size_bytes);
+size_t utvm_rpc_server_receive_byte(utvm_rpc_server_t server, uint8_t byte);
 
 /*! \brief Perform normal processing of received data.
  *

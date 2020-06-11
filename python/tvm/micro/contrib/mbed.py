@@ -113,22 +113,42 @@ class MbedCompiler(tvm.micro.Compiler):
 
     return True
 
+  OPTS_TO_PROFILE_KEYS = {
+      'cflags': 'c',
+      'ccflags': 'cxx',
+      'ldflags': 'ld',
+  }
+
   def _OptionsToArgs(self, options):
     profile_name = options.get('profile-name', 'release.json' if not self.debug else 'develop.json')
     profile_path = os.path.join(f'{self._project_dir}/mbed-os/tools/profiles', profile_name)
-    if 'profile' in options:
+    if 'profile' in options or any(k in options for k in self.OPTS_TO_PROFILE_KEYS):
       with open(profile_path) as profile_f:
         profile = json.load(profile_f)
 
-      for key in options['profile']:
-        profile[self._mbed_toolchain][key] = (
-          profile[self._mbed_toolchain].get(key, []) + options['profile'][key])
+      profile_extensions = options.get('profile', {})
+      for key, opts in profile_extensions.items():
+        profile[self._mbed_toolchain][key] = profile[self._mbed_toolchain].get(key, []) + opts
+
+      for opt_key, profile_key in self.OPTS_TO_PROFILE_KEYS.items():
+        if opt_key not in options:
+          continue
+
+        profile[self._mbed_toolchain][profile_key] = (
+          profile[self._mbed_toolchain].get(profile_key, []) + options[opt_key])
 
       profile_path = os.path.join(self._project_dir, 'tvm_profile.json')
       with open(profile_path, 'w') as profile_f:
         json.dump(profile, profile_f, sort_keys=True, indent=4)
 
-    return ['--profile', profile_path] + options.get('args', [])
+    args = ['--profile', profile_path]
+    if 'include_dirs' in options:
+      for inc_dir in options['include_dirs']:
+        # TODO warn about stray source files.
+        args.append('--source')
+        args.append(inc_dir)
+
+    return args + options.get('args', [])
 
   def Library(self, output, objects, options=None):
     all_dirnames = [os.path.dirname(obj) for obj in objects]
@@ -175,11 +195,11 @@ class MbedCompiler(tvm.micro.Compiler):
     args += ['--build', output]
     self._invoke_mbed(args)
 
-    return tvm.micro.MicroBinary(os.path.join(output, f'{artifact_name}.bin'),
-                                 [os.path.join(output, f'{artifact_name}.elf')])
+    return tvm.micro.MicroBinary(
+      output, f'{artifact_name}.bin', debug_files=[f'{artifact_name}.elf'])
 
-  def Flasher(self, target_serial_number=None):
-    return Flasher(self._mbed_target, target_serial_number)
+  def Flasher(self, **kw):
+    return Flasher(self._mbed_target, **kw)
 
   def _invoke_mbed(self, args):
     try:
@@ -193,9 +213,17 @@ class MbedCompiler(tvm.micro.Compiler):
 
 class Flasher(tvm.micro.Flasher):
 
-  def __init__(self, mbed_target, target_serial_number=None):
+  def __init__(self, mbed_target, target_serial_number=None, debug=False, debug_remote_hostport=None,
+               debug_gdb_binary='arm-none-eabi-gdb', debug_wrapping_context_manager=None):
     self._mbed_target = mbed_target
     self._target_serial_number = target_serial_number
+    self._debug = debug
+    self._debug_remote_hostport = debug_remote_hostport
+    self._debug_gdb_binary = debug_gdb_binary
+    self._debug_wrapping_context_manager = debug_wrapping_context_manager
+    if debug and not debug_remote_hostport:
+      raise ValueError('Must supply debug_remote_hostport= when debug=True')
+
     d = mbed_os_tools.detect.create()
     self._devices = d.list_mbeds(filter_function=self._filter_mbed)
     logger.debug('Found devices: %r', self._devices)
@@ -215,8 +243,17 @@ class Flasher(tvm.micro.Flasher):
     return True
 
   def Flash(self, micro_binary):
-    bin_file = [x for x in micro_binary if x.endswith('.bin')][0]
+    bin_file = micro_binary.abspath(micro_binary.binary_file)
     print('flashing', bin_file)
     mbed_os_tools.test.host_tests_toolbox.flash_dev(
         self._devices[0]['mount_point'], bin_file, program_cycle_s=4)
-    return tvm.micro.SerialTransport(self._devices[0]['serial_port'], baudrate=115200)
+
+    serial_transport = tvm.micro.SerialTransport(port_path=self._devices[0]['serial_port'], baudrate=115200)
+    if self._debug:
+      return tvm.micro.DebugWrapperTransport(
+        debugger=tvm.micro.GdbRemoteDebugger(self._debug_gdb_binary, self._debug_remote_hostport,
+                                             micro_binary.abspath(micro_binary.debug_files[0]),
+                                             wrapping_context_manager=self._debug_wrapping_context_manager),
+        transport=serial_transport)
+
+    return serial_transport

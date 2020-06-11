@@ -40,28 +40,28 @@ def _generate_mod_wrapper(src_path):
       if m:
         funcs.append(m.group(1))
 
-  encoded_funcs = '\\0'.join(funcs)
+  encoded_funcs = f'\\{len(funcs):03o}' + '\\0'.join(funcs)
   lines = [
       '#include <tvm/runtime/c_runtime_api.h>',
       '#include <tvm/runtime/crt/module.h>',
       '#include <stdio.h>',
       '',
-      'static TVMFunctionHandle funcs[] = {',
+      'static TVMBackendPackedCFunc funcs[] = {',
   ]
   for f in funcs:
     lines.append(f'    &{f},')
   lines += [
       '};',
-      'static const TVMModule system_lib = {',
-      '    &TVMModule_GetFunction,',
-      '    {\n',
+      'static const TVMFuncRegistry system_lib_registry = {',
       f'       "{encoded_funcs}\\0",',
       '        funcs,',
-      '    }',
+      '};',
+      'static const TVMModule system_lib = {',
+      '    &system_lib_registry,',
       '};',
       '',
       'const TVMModule* TVMSystemLibEntryPoint(void) {',
-      '    fprintf(stderr, "create system lib!! %p\\n", system_lib.registry.funcs[0]);',
+      '    fprintf(stderr, "create system lib!! %p\\n", system_lib.registry->funcs[0]);',
       '    return &system_lib;',
       '}',
       '',   # blank line to end the file
@@ -70,7 +70,19 @@ def _generate_mod_wrapper(src_path):
     wrapper_f.write('\n'.join(lines))
 
 
-RUNTIME_LIB_NAMES = ['common', 'rpc_server', 'host']
+CRT_RUNTIME_LIB_NAMES = ['common', 'rpc_server'] #, 'host']
+
+
+TVM_ROOT_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+
+CRT_ROOT_DIR = os.path.join(TVM_ROOT_DIR, 'src', 'runtime', 'crt')
+
+
+RUNTIME_LIB_SRC_DIRS = (
+  [os.path.join(TVM_ROOT_DIR,
+                '3rdparty/mbed-os/targets/TARGET_NORDIC/TARGET_NRF5x/TARGET_SDK_11/libraries/crc16')] +
+  [os.path.join(CRT_ROOT_DIR, n) for n in CRT_RUNTIME_LIB_NAMES])
 
 
 RUNTIME_SRC_REGEX = re.compile('^.*\.cc?$', re.IGNORECASE)
@@ -120,13 +132,11 @@ def build_static_runtime(workspace, compiler, module, lib_opts=None, bin_opts=No
   libs = []
   libs.append(compiler.Library(mod_build_dir, [mod_src_path], lib_opts))
 
-  crt_root_dir = os.path.realpath(os.path.join(
-    os.path.dirname(__file__), '..', '..', '..', 'src', 'runtime', 'crt'))
-  for lib_name in RUNTIME_LIB_NAMES:
+  for lib_src_dir in RUNTIME_LIB_SRC_DIRS:
+    lib_name = os.path.basename(lib_src_dir)
     lib_build_dir = workspace.relpath(f'build/{lib_name}')
     os.makedirs(lib_build_dir)
 
-    lib_src_dir = os.path.join(crt_root_dir, lib_name)
     lib_srcs = []
     for p in os.listdir(lib_src_dir):
       if RUNTIME_SRC_REGEX.match(p):

@@ -32,8 +32,6 @@ extern "C" {
 #include <inttypes.h>
 #include <stdlib.h>
 
-
-
 /*!
  * \brief Allocate memory from manager
  * \param size The size of memory
