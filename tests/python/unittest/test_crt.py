@@ -57,7 +57,7 @@ def test_compile_runtime():
       print('got system lib', system_lib)
       system_lib.get_function('add')(A_data, B_data, C_data)
       print('got data!', C_data.asnumpy())
-      assert C_data.asnumpy() == numpy.array([6, 7])
+      assert (C_data.asnumpy() == numpy.array([6, 7])).all()
 
 
 if __name__ == '__main__':
