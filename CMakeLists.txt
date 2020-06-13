@@ -50,6 +50,7 @@ tvm_option(DMLC_PATH "Path to DMLC" "3rdparty/dmlc-core/include")
 tvm_option(RANG_PATH "Path to RANG" "3rdparty/rang/include")
 tvm_option(COMPILER_RT_PATH "Path to COMPILER-RT" "3rdparty/compiler-rt")
 tvm_option(PICOJSON_PATH "Path to PicoJSON" "3rdparty/picojson")
+tvm_option(MBED_OS_CRC16_PATH "Path to crc16 lib from mBED-OS" "3rdparty/mbed-os/targets/TARGET_NORDIC/TARGET_NRF5x/TARGET_SDK_11/libraries/crc16")
 
 # Contrib library options
 tvm_option(USE_BLAS "The blas library to be linked" none)
@@ -82,6 +83,7 @@ include_directories(${DMLC_PATH})
 include_directories(${RANG_PATH})
 include_directories(${COMPILER_RT_PATH})
 include_directories(${PICOJSON_PATH})
+include_directories(${MBED_OS_CRC16_PATH})
 
 # initial variables
 set(TVM_LINKER_LIBS "")

@@ -66,10 +66,10 @@ class Unframer {
    * \param data The new data to unframe and send downstream.
    * \param data_size_bytes The number of valid bytes in data.
    * \param bytes_consumed Pointer written with the number of bytes consumed from data.
-   * \return 1 when a packet was consumed. 0 when no packets were consumed, but no errors were
-   *      encountered in consuming `data` (continue writing). Negative number when an error occurred.
+   * \return 0 when successful, negative value when an error occurred. If 0 is returned, no errors
+   *      were encountered in consuming `data` (continue writing).
    */
-  int Write(uint8_t* data, size_t data_size_bytes, size_t* bytes_consumed);
+  int Write(const uint8_t* data, size_t data_size_bytes, size_t* bytes_consumed);
 //PayloadWriteFunc write_func,
   /*! \brief Reset unframer to initial state. */
   void Reset();
@@ -82,11 +82,11 @@ class Unframer {
   int FindCrcEnd();
 
   inline bool is_buffer_full(size_t buffer_full_bytes) {
-    return num_buffer_bytes_valid_ < buffer_full_bytes;
+    return num_buffer_bytes_valid_ >= buffer_full_bytes;
   }
 
   /*! \brief Consume input into buffer_ until buffer_ has buffer_full_bytes. */
-  int AddToBuffer(size_t buffer_full_bytes);
+  int AddToBuffer(size_t buffer_full_bytes, bool update_crc);
 
   void ClearBuffer();
 
@@ -96,11 +96,12 @@ class Unframer {
    * \param buffer_size_bytes Size of buffer, in bytes.
    * \param bytes_filled A pointer to an accumulator to which is added the number of bytes written
    *      to `buffer`.
+   * \param update_crc true when the CRC should be updated with the escaped bytes.
    * \return 0 if successful, -1 if a start-of-packet escape code was encountered. If a start-of-packet
    *      escape was encountered, *bytes_filled indicates the number of bytes before the
    *      Escape::kEscapeStart byte.
    */
-  int ConsumeInput(uint8_t* buffer, size_t buffer_size_bytes, size_t* bytes_filled);
+  int ConsumeInput(uint8_t* buffer, size_t buffer_size_bytes, size_t* bytes_filled, bool update_crc);
 
   WriteStream* stream_;
 
@@ -112,7 +113,7 @@ class Unframer {
   };
   State state_;
 
-  uint8_t* input_;
+  const uint8_t* input_;
   size_t input_size_bytes_;
 
   bool saw_escape_start_;
@@ -190,7 +191,7 @@ class Framer {
     kIdle = 1,
 
     /*! \brief State entered when a packet payload or CRC needs to be transmitted. */
-    kTransmitPacketPayload = 2
+    kTransmitPacketPayload = 2,
   };
 
   /*!
@@ -198,9 +199,11 @@ class Framer {
    *
    * \param data Unescaped data to write.
    * \param data_size_bytes Number of valid bytes in data.
+   * \param escape true if escaping should be applied.
+   * \param update_crc true if escaping should be applied.
    * \return 0 on success, negative value on error.
    */
-  int WriteAndCrc(const uint8_t* data, size_t data_size_bytes);
+  int WriteAndCrc(const uint8_t* data, size_t data_size_bytes, bool escape, bool update_crc);
 
   /*! \brief Called to write framed data to the transport. */
   WriteStream* stream_;

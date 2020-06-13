@@ -29,20 +29,10 @@
 
 #include <tvm/runtime/crt/platform.h>
 
-#ifdef TVM_RUNTIME_CRT_CONFIG_H_
-#error "Must include logging.h before crt_config.h"
-#endif
-
-#define LOG_LEVEL_DEBUG 3
-#define LOG_LEVEL_INFO  2
-#define LOG_LEVEL_WARN  1
-#define LOG_LEVEL_ERROR 0
-
-#include "crt_config.h"
-
-#ifndef LOG_LEVEL
-#define LOG_LEVEL LOG_LEVEL_WARN
-#endif
+#define TVM_CRT_LOG_LEVEL_DEBUG 3
+#define TVM_CRT_LOG_LEVEL_INFO  2
+#define TVM_CRT_LOG_LEVEL_WARN  1
+#define TVM_CRT_LOG_LEVEL_ERROR 0
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,33 +41,14 @@ extern "C" {
 void __attribute__((format(printf,1,2))) TVMLogf(const char* fmt, ...);
 
 #define LOG(level, x, ...)                      \
-  if (LOG_LEVEL >= level) {                     \
+  if (TVM_CRT_LOG_LEVEL >= level) {                     \
     TVMLogf(x, ##__VA_ARGS__);                  \
   }
 
-#if LOG_LEVEL >= LOG_LEVEL_ERROR
-#define LOG_ERROR(x, ...) TVMLogf(x, ##__VA_ARGS__)
-#else
-#define LOG_ERROR(x, ...)
-#endif
-
-#if LOG_LEVEL >= LOG_LEVEL_WARN
-#define LOG_WARN(x, ...) TVMLogf(x, ##__VA_ARGS__)
-#else
-#define LOG_WARN(x, ...)
-#endif
-
-#if LOG_LEVEL >= LOG_LEVEL_INFO
-#define LOG_INFO(x, ...) TVMLogf(x, ##__VA_ARGS__)
-#else
-#define LOG_INFO(x, ...)
-#endif
-
-#if LOG_LEVEL >= LOG_LEVEL_DEBUG
-#define LOG_DEBUG(x, ...) TVMLogf(x, ##__VA_ARGS__)
-#else
-#define LOG_DEBUG(x, ...)
-#endif
+#define LOG_ERROR(x, ...) LOG(TVM_CRT_LOG_LEVEL_ERROR, x, ##__VA_ARGS__)
+#define LOG_WARN(x, ...) LOG(TVM_CRT_LOG_LEVEL_WARN, x, ##__VA_ARGS__)
+#define LOG_INFO(x, ...) LOG(TVM_CRT_LOG_LEVEL_INFO, x, ##__VA_ARGS__)
+#define LOG_DEBUG(x, ...) LOG(TVM_CRT_LOG_LEVEL_DEBUG, x, ##__VA_ARGS__)
 
 #ifndef CHECK
 #define CHECK(x)                                 \

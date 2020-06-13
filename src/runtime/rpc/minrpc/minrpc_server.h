@@ -60,7 +60,7 @@ namespace runtime {
  * \tparam TIOHandler IO provider to provide io handling.
  *         An IOHandler needs to provide the following functions:
  *         - PosixWrite, PosixRead, Close: posix style, read, write, close API.
- *         - PacketStart(num_bytes), PacketDone(): framing APIs.
+ *         - MessageStart(num_bytes), MessageDone(): framing APIs.
  *         - Exit: exit with status code.
  */
 template <typename TIOHandler>
@@ -90,7 +90,7 @@ class MinRPCServer {
 
     allow_clean_shutdown_ = false;
 
-    fprintf(stderr, "ProcessOnePacket code=%s\n", RPCCodeToString(code));
+    TVMLogf("ProcessOnePacket code=%s\n", RPCCodeToString(code));
     if (code >= RPCCode::kSyscallCodeStart) {
       this->HandleSyscallFunc(code);
     } else {
@@ -196,11 +196,11 @@ class MinRPCServer {
       RPCCode code = RPCCode::kCopyAck;
       uint64_t packet_nbytes = sizeof(code) + num_bytes;
 
-      io_->PacketStart(packet_nbytes);
+      io_->MessageStart(packet_nbytes);
       this->Write(packet_nbytes);
       this->Write(code);
       this->WriteArray(data_ptr, num_bytes);
-      io_->PacketDone();
+      io_->MessageDone();
     } else {
       this->ReturnLastTVMError();
     }
@@ -389,6 +389,7 @@ class MinRPCServer {
     DLDataType type_hint = values[3].v_type;
 
     void* handle;
+    TVMLogf("TVMDeviceAllocDataSpace(%" PRIuPTR ", %" PRId64 ", %" PRId64 ")", ctx, nbytes, alignment);
     int call_ecode = TVMDeviceAllocDataSpace(ctx, nbytes, alignment, type_hint, &handle);
 
     if (call_ecode == 0) {
@@ -450,7 +451,6 @@ class MinRPCServer {
 
   template <typename T>
   void ReadArray(T* data, size_t count) {
-    fprintf(stderr, "read array %u\n", count);
     static_assert(std::is_pod<T>::value, "need to be trival");
     return this->ReadRawBytes(data, sizeof(T) * count);
   }
@@ -465,6 +465,14 @@ class MinRPCServer {
   void WriteArray(T* data, size_t count) {
     static_assert(std::is_pod<T>::value, "need to be trival");
     return this->WriteRawBytes(data, sizeof(T) * count);
+  }
+
+  void MessageStart(uint64_t packet_nbytes) {
+    io_->MessageStart(packet_nbytes);
+  }
+
+  void MessageDone() {
+    io_->MessageDone();
   }
 
  private:
@@ -514,12 +522,12 @@ class MinRPCServer {
 
     uint64_t packet_nbytes = sizeof(code) + sizeof(num_args) + sizeof(tcode);
 
-    io_->PacketStart(packet_nbytes);
+    io_->MessageStart(packet_nbytes);
     this->Write(packet_nbytes);
     this->Write(code);
     this->Write(num_args);
     this->Write(tcode);
-    io_->PacketDone();
+    io_->MessageDone();
   }
 
   void ReturnHandle(void* handle) {
@@ -528,16 +536,17 @@ class MinRPCServer {
     RPCCode code = RPCCode::kReturn;
     uint64_t encode_handle = reinterpret_cast<uint64_t>(handle);
 
+    TVMLogf("Return handle: %p", handle);
     uint64_t packet_nbytes =
         sizeof(code) + sizeof(num_args) + sizeof(tcode) + sizeof(encode_handle);
 
-    io_->PacketStart(packet_nbytes);
+    io_->MessageStart(packet_nbytes);
     this->Write(packet_nbytes);
     this->Write(code);
     this->Write(num_args);
     this->Write(tcode);
     this->Write(encode_handle);
-    io_->PacketDone();
+    io_->MessageDone();
   }
 
   void ReturnException(const char* msg) { RPCReference::ReturnException(msg, this); }

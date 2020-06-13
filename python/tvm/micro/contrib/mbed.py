@@ -32,6 +32,12 @@ class NoSuchDeviceError(Exception):
   """Raised when there is no target with the given serial number."""
 
 
+MBED_DEFAULT_OPTIONS = {
+  'ccflags': ['-std=gnu++14'],  # Need gnu++14 for https://github.com/ARMmbed/mbed-os/issues/10548
+  'ldflags': ['-std=gnu++14'],
+}
+
+
 class MbedCompiler(tvm.micro.Compiler):
 
   def _SetIfNeeded(self, mbed_config_name, value):

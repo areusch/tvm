@@ -18,5 +18,12 @@
 if(USE_MICRO)
   message(STATUS "Build with Micro support")
   file(GLOB RUNTIME_MICRO_SRCS src/runtime/micro/*.cc)
+  list(APPEND RUNTIME_MICRO_SRCS
+      3rdparty/mbed-os/targets/TARGET_NORDIC/TARGET_NRF5x/TARGET_SDK_11/libraries/crc16/crc16.c
+      src/runtime/crt/rpc_server/buffer.cc
+      src/runtime/crt/rpc_server/framing.cc
+      src/runtime/crt/rpc_server/session.cc
+      src/runtime/crt/rpc_server/write_stream.cc)
+  include_directories("src/runtime/crt/host")
   list(APPEND RUNTIME_SRCS ${RUNTIME_MICRO_SRCS})
 endif(USE_MICRO)

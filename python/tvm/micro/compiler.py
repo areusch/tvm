@@ -1,9 +1,12 @@
 import abc
+import glob
 import os
 import re
 
 from tvm.contrib import binutil
 import tvm.target
+from . import build
+from . import debugger
 from . import transport
 
 
@@ -94,6 +97,33 @@ class Compiler(metaclass=abc.ABCMeta):
 
     return opts
 
+  # @classmethod
+  # def _MergeOptions(cls, default, override, path=''):
+  #   if isinstance(override, (str, bytes, int, float)):
+  #     if isinstance(default, (str, bytes, int, float, None)):
+  #       return override
+
+  #     raise OptionOverrideError(
+  #         f'overrriding {path}: trying to override {default!r} with primitive {override!r}')
+
+
+  #   elif isinstance(override, (list, tuple)):
+  #     if default is None:
+  #       return override
+
+  #     if not isinstance(default, (list, tuple)):
+  #       raise OptionOverrideError(
+  #           f'overrriding {path}: trying to override {default!r} with non-list {override!r}')
+
+  #     new_list = list(default)
+  #     for
+
+  #   options = default_options
+  #   for key, values in extensions.items():
+  #     if isinstance(values, list):
+
+  #     if isinstance(
+
   @abc.abstractmethod
   def Library(self, output, objects, options=None):
     """Build a library from the given source files.
@@ -112,12 +142,12 @@ class Compiler(metaclass=abc.ABCMeta):
     Returns
     -------
     MicroLibrary :
-        The compiled library, as an artifact.
+        The compiled library, as a MicroLibrary instance.
     """
     raise NotImplementedError()
 
   @abc.abstractmethod
-  def Binary(self, output, objects, options=None):
+  def Binary(self, output, objects, options=None, link_main=True, main_options=None):
     """Link a binary from the given object and/or source files.
 
     Parameters
@@ -131,11 +161,19 @@ class Compiler(metaclass=abc.ABCMeta):
         be statically-linked.
     options: Optional[List[str]]
         If given, additional command-line flags to pass to the compiler.
+    link_main: Optional[bool]
+        True if the standard main entry point for this Compiler should be included in the binary.
+        False if a main entry point is provided in one of `objects`.
+    main_options: Optional[List[str]]
+        If given, additional command-line flags to pass to the compiler when compiling the main()
+        library. In some cases, the main() may be compiled directly into the final binary along with
+        `objects` for logistical reasons. In those cases, specifying main_options is an error and
+        ValueError will be raised.
 
     Returns
     -------
-    MicroLibrary :
-        The compiled binary, as an artifact.
+    MicroBinary :
+        The compiled binary, as a MicroBinary instance.
     """
     raise NotImplementedError()
 
@@ -186,7 +224,7 @@ class DefaultCompiler(Compiler):
 
     return tvm.micro.MicroLibrary(output, [output_filename])
 
-  def Binary(self, output, objects, options=None):
+  def Binary(self, output, objects, options=None, link_main=True, main_options=None):
     assert self.target is not None, (
       'must specify target= to constructor, or compile sources which specify the target first')
 
@@ -195,12 +233,24 @@ class DefaultCompiler(Compiler):
     if options is not None:
       args.extend(options.get('ldflags', []))
 
+      for d in options.get('include_dirs', []):
+        args.extend(['-I', d])
+
     output_filename = os.path.basename(output)
     output_abspath = os.path.join(output, output_filename)
     args.extend(['-g', '-o', output_abspath])
     for obj in objects:
       for lib_name in obj.library_files:
         args.append(obj.abspath(lib_name))
+
+    if link_main:
+      host_main_srcs = glob.glob(os.path.join(build.CRT_ROOT_DIR, 'host', '*.cc'))
+      if main_options:
+        main_lib = self.Library(os.path.join(output, 'host'), host_main_srcs, main_options)
+        for lib_name in main_lib.library_files:
+          args.append(main_lib.abspath(lib_name))
+      else:
+        args.extend(host_main_srcs)
 
     binutil.run_cmd(args)
     return tvm.micro.MicroBinary(output, output_filename, [])
@@ -236,6 +286,8 @@ class HostFlasher(Flasher):
 
   def Flash(self, micro_binary):
     if self.debug:
-      return transport.DebugSubprocessTransport([micro_binary.abspath(micro_binary.binary_file)])
+      gdb_wrapper = debugger.GdbTransportDebugger([micro_binary.abspath(micro_binary.binary_file)])
+      return transport.DebugWrapperTransport(
+        debugger=gdb_wrapper, transport=gdb_wrapper.Transport())
     else:
       return transport.SubprocessTransport([micro_binary.abspath(micro_binary.binary_file)])

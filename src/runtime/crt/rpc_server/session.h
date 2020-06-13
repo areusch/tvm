@@ -33,65 +33,110 @@
 namespace tvm {
 namespace runtime {
 
-enum class PacketType : uint8_t {
-  kStartSessionPacket = 0,
+enum class MessageType : uint8_t {
+  kStartSessionMessage = 0,
   kNormalTraffic = 1,
   kLogMessage = 2,
 };
 
 typedef struct SessionHeader {
   uint16_t session_id;
-  PacketType packet_type;
-} SessionHeader;
+  MessageType message_type;
+} __attribute__((packed)) SessionHeader;
 
 /*!
  * \brief CRT communication session management class.
  * Assumes the following properties provided by the underlying transport:
- *  - in-order delivery of packets.
- *  - reliable delivery of packets.
+ *  - in-order delivery.
+ *  - reliable delivery.
  *
  * Specifically, designed for use with UARTs. Will probably work over semihosting and USB; will
  * probably not work reliably enough over UDP.
  */
 class Session {
  public:
-  /*! \brief Callback invoked when a full packet is received.
+  /*! \brief Callback invoked when a full message is received.
    *
-   * Note that this function is called for any packet with type other than kStartSessionPacket.
+   * Note that this function is called for any message with type other than kStartSessionMessage.
    */
-  typedef void(*PacketReceivedFunc)(void*, PacketType, Buffer*);
+  typedef void(*MessageReceivedFunc)(void*, MessageType, Buffer*);
 
   Session(uint8_t initial_session_nonce, Framer* framer,
-          Buffer* receive_buffer,  PacketReceivedFunc packet_received_func,
-          void* packet_received_func_context) :
+          Buffer* receive_buffer,  MessageReceivedFunc message_received_func,
+          void* message_received_func_context) :
       nonce_{initial_session_nonce}, state_{State::kReset}, session_id_{0}, receiver_{this},
       framer_{framer}, receive_buffer_{receive_buffer},
-      packet_received_func_{packet_received_func},
-      packet_received_func_context_{packet_received_func_context} {
+      receive_buffer_has_complete_message_{false},
+      message_received_func_{message_received_func},
+      message_received_func_context_{message_received_func_context} {
         receive_buffer_->Clear();
       }
 
   /*!
-   * \brief Start a new session regardless of state. Sends kStartSessionPacket.
+   * \brief Start a new session regardless of state. Sends kStartSessionMessage.
    * \return 0 on success, negative error code on failure.
    */
   int StartSession();
 
   /*!
-   * \brief Obtain receiver pointer to pass to the framing layer.
+   * \brief Obtain a WriteStream implementation for use by the framing layer.
    * \return A WriteStream to which received data should be written. Owned by this class.
    */
   WriteStream* Receiver() {
     return &receiver_;
   }
 
-  int SendPacket(PacketType packet_type, const uint8_t* packet_data, size_t packet_size_bytes);
+  /*!
+   * \brief Send a full message including header, payload, and CRC footer.
+   * \param message_type One of MessageType; distinguishes the type of traffic at the session layer.
+   * \param message_data The data contained in the message.
+   * \param message_size_bytes The number of valid bytes in message_data.
+   * \return 0 on success, negative error code on failure.
+   */
+  int SendMessage(MessageType message_type, const uint8_t* message_data, size_t message_size_bytes);
 
-  int StartPacket(PacketType packet_type, size_t packet_size_bytes);
+  /*!
+   * \brief Send the framing and session layer headers.
+   *
+   * This function allows messages to be sent in pieces.
+   *
+   * \param message_type One of MessageType; distinguishes the type of traffic at the session layer.
+   * \param message_size_bytes The size of the message body, in bytes. Excludes the framing and session
+   *     layer headers.
+   * \return 0 on success, negative error code on failure.
+   */
+  int StartMessage(MessageType message_type, size_t message_size_bytes);
 
-  int SendPayloadChunk(const uint8_t* payload_data, size_t payload_size_bytes);
+  /*!
+   * \brief Send a part of the message body.
+   *
+   * This function allows messages to be sent in pieces.
+   *
+   * \param chunk_data The data contained in this message body chunk.
+   * \param chunk_size_bytes The number of valid bytes in chunk_data.
+   * \return 0 on success, negative error code on failure.
+   */
+  int SendBodyChunk(const uint8_t* chunk_data, size_t chunk_size_bytes);
 
-  int FinishPacket();
+  /*!
+   * \brief Finish sending the message by sending the framing layer footer.
+   * \return 0 on success, negative error code on failure.
+   */
+  int FinishMessage();
+
+  /*! \brief Returns true if the session is in the established state. */
+  bool IsEstablished() const {
+    return state_ == State::kSessionEstablished;
+  }
+
+  /*!
+   * \brief Clear the receive buffer and prepare to receive next message.
+   *
+   * Call this function after MessageReceivedFunc is invoked. Any SessionReceiver::Write() calls
+   * made will return errors until this function is called to prevent them from corrupting the
+   * valid message in the receive buffer.
+   */
+  void ClearReceiveBuffer();
 
  private:
   class SessionReceiver : public WriteStream {
@@ -114,7 +159,7 @@ class Session {
 
   void RegenerateNonce();
 
-  int SendInternal(PacketType packet_type, const uint8_t* packet_data, size_t packet_size_bytes);
+  int SendInternal(MessageType message_type, const uint8_t* message_data, size_t message_size_bytes);
 
   void SendSessionStartReply(const SessionHeader& header);
 
@@ -126,8 +171,9 @@ class Session {
   SessionReceiver receiver_;
   Framer* framer_;
   Buffer* receive_buffer_;
-  PacketReceivedFunc packet_received_func_;
-  void* packet_received_func_context_;
+  bool receive_buffer_has_complete_message_;
+  MessageReceivedFunc message_received_func_;
+  void* message_received_func_context_;
 };
 
 }  // namespace runtime

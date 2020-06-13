@@ -17,7 +17,7 @@
 """MicroTVM module for bare-metal backends"""
 
 from .artifact import Artifact
-from .build import build_static_runtime, Workspace
+from .build import build_static_runtime, DefaultOptions, TVM_ROOT_DIR, Workspace
 from .compiler import Compiler, DefaultCompiler, Flasher
 from .debugger import GdbRemoteDebugger
 from .micro_library import MicroLibrary

@@ -50,16 +50,23 @@ class MicroIOHandler {
   MicroIOHandler(Session* session, Buffer* receive_buffer) :
       session_{session}, receive_buffer_{receive_buffer} {}
 
-  void PacketStart(size_t packet_size_bytes) {
-    session_->StartPacket(PacketType::kNormalTraffic, packet_size_bytes);
+  void MessageStart(size_t message_size_bytes) {
+    fprintf(stderr, "utvm: start message (%" PRIuMAX " bytes)\n", message_size_bytes);
+    session_->StartMessage(MessageType::kNormalTraffic, message_size_bytes + 8);
   }
 
-  size_t PosixWrite(const uint8_t* buf, size_t buf_size_bytes) {
-    return session_->SendPayloadChunk(buf, buf_size_bytes);
+  ssize_t PosixWrite(const uint8_t* buf, size_t buf_size_bytes) {
+    fprintf(stderr, "utvm: posix write: %" PRIuMAX "\n", buf_size_bytes);
+    int to_return = session_->SendBodyChunk(buf, buf_size_bytes);
+    if (to_return < 0) {
+      return to_return;
+    }
+    return buf_size_bytes;
   }
 
-  void PacketDone() {
-    CHECK(session_->FinishPacket() == 0);
+  void MessageDone() {
+    fprintf(stderr, "utvm: done message\n");
+    CHECK(session_->FinishMessage() == 0);
   }
 
   ssize_t PosixRead(uint8_t* buf, size_t buf_size_bytes) {
@@ -101,20 +108,20 @@ class MicroRPCServer {
                  utvm_rpc_channel_write_t write_func, void* write_func_ctx) :
       receive_buffer_{receive_storage, receive_storage_size_bytes},
       send_stream_{write_func, write_func_ctx}, framer_{&send_stream_},
-      session_{0xa5, &framer_, &receive_buffer_, &HandleCompletePacketCb, this},
+      session_{0xa5, &framer_, &receive_buffer_, &HandleCompleteMessageCb, this},
       io_{&session_, &receive_buffer_},
       unframer_{session_.Receiver()},
       rpc_server_{&io_}, has_pending_byte_{false}, is_running_{true} {}
 
-  /*! \brief Process one packet from the receive buffer, if possible.
+  /*! \brief Process one message from the receive buffer, if possible.
    *
-   * \return true if additional packets could be processed. false if the server shutdown request has
+   * \return true if additional messages could be processed. false if the server shutdown request has
    * been received.
    */
   bool Loop() {
     if (has_pending_byte_) {
       size_t bytes_consumed;
-      CHECK(unframer_.Write(&pending_byte_, 1, &bytes_consumed) == 0);
+      CHECK(unframer_.Write(&pending_byte_, 1, &bytes_consumed) >= 0);
       CHECK(bytes_consumed == 1);
       has_pending_byte_ = false;
     }
@@ -129,7 +136,7 @@ class MicroRPCServer {
   }
 
   void Log(const uint8_t* message, size_t message_size_bytes) {
-    int to_return = session_.SendPacket(PacketType::kLogMessage, message, message_size_bytes);
+    int to_return = session_.SendMessage(MessageType::kLogMessage, message, message_size_bytes);
     if (to_return != 0) {
       TVMPlatformAbort(-1);
     }
@@ -148,16 +155,17 @@ class MicroRPCServer {
   uint8_t pending_byte_;
   bool is_running_;
 
-  void HandleCompletePacket(PacketType packet_type, Buffer* buf) {
-    if (packet_type != PacketType::kNormalTraffic) {
+  void HandleCompleteMessage(MessageType message_type, Buffer* buf) {
+    if (message_type != MessageType::kNormalTraffic) {
       return;
     }
 
     is_running_ = rpc_server_.ProcessOnePacket();
+    session_.ClearReceiveBuffer();
   }
 
-  static void HandleCompletePacketCb(void* context, PacketType packet_type, Buffer* buf) {
-    static_cast<MicroRPCServer*>(context)->HandleCompletePacket(packet_type, buf);
+  static void HandleCompleteMessageCb(void* context, MessageType message_type, Buffer* buf) {
+    static_cast<MicroRPCServer*>(context)->HandleCompleteMessage(message_type, buf);
   };
 };
 
@@ -189,6 +197,13 @@ void TVMLogf(const char* format, ...) {
   va_start(args, format);
   size_t num_bytes_logged = vsnprintf(log_buffer, sizeof(log_buffer), format, args);
   va_end(args);
+
+  // Most header-based logging frameworks tend to insert '\n' at the end of the log message.
+  // Remove that for remote logging, since the remote logger will do the same.
+  if (num_bytes_logged > 0 && log_buffer[num_bytes_logged - 1] == '\n') {
+    log_buffer[num_bytes_logged - 1] = 0;
+    num_bytes_logged--;
+  }
 
   static_cast<tvm::runtime::MicroRPCServer*>(g_rpc_server)->Log(
     reinterpret_cast<uint8_t*>(log_buffer), num_bytes_logged);

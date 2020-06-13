@@ -27,16 +27,18 @@
 #include <type_traits>
 #include <string.h>
 #include <tvm/runtime/crt/logging.h>
+#include <cstdio>
+#include "crt_config.h"
 
 namespace tvm {
 namespace runtime {
 
 template <typename E>
-static constexpr auto to_integral(E e) {
+static constexpr typename std::underlying_type<E>::type to_integral(E e) {
   return static_cast<typename std::underlying_type<E>::type>(e);
 }
 
-int Unframer::Write(uint8_t* data, size_t data_size_bytes, size_t* bytes_consumed) {
+int Unframer::Write(const uint8_t* data, size_t data_size_bytes, size_t* bytes_consumed) {
   int return_code = 0;
   input_ = data;
   input_size_bytes_ = data_size_bytes;
@@ -61,9 +63,9 @@ int Unframer::Write(uint8_t* data, size_t data_size_bytes, size_t* bytes_consume
     }
   }
 
+  *bytes_consumed = data_size_bytes - input_size_bytes_;
   input_ = nullptr;
   input_size_bytes_ = 0;
-  *bytes_consumed = data_size_bytes - input_size_bytes_;
 
   return return_code;
 }
@@ -74,8 +76,14 @@ int Unframer::FindPacketStart() {
     if (input_[i] == to_integral(Escape::kEscapeStart)) {
       saw_escape_start_ = !saw_escape_start_;
     } else if (input_[i] == to_integral(Escape::kPacketStart) && saw_escape_start_) {
+      uint8_t packet_start_sequence[2]{to_integral(Escape::kEscapeStart), to_integral(Escape::kPacketStart)};
+      crc_ = crc16_compute(packet_start_sequence, sizeof(packet_start_sequence), nullptr);
+      saw_escape_start_ = false;
       state_ = State::kFindPacketLength;
+      i++;
       break;
+    } else {
+      saw_escape_start_ = false;
     }
   }
 
@@ -84,50 +92,63 @@ int Unframer::FindPacketStart() {
   return 0;
 }
 
-int Unframer::ConsumeInput(uint8_t* buffer, size_t buffer_size_bytes, size_t* bytes_filled) {
+int Unframer::ConsumeInput(uint8_t* buffer, size_t buffer_size_bytes, size_t* bytes_filled, bool update_crc) {
+  CHECK(*bytes_filled < buffer_size_bytes);
   int to_return = 0;
   size_t i;
-  *bytes_filled = 0;
   for (i = 0; i < input_size_bytes_; i++) {
     uint8_t c = input_[i];
     if (saw_escape_start_) {
       saw_escape_start_ = false;
-
       if (c == to_integral(Escape::kPacketStart)) {
+        // When the start packet sequence is seen, abort unframing the current packet. Since the
+        // escape byte has already been parsed, update the CRC include only the escape byte. This
+        // readies the unframer to consume the kPacketStart byte on the next Write() call.
+        uint8_t escape_start = to_integral(Escape::kEscapeStart);
+        crc_ = crc16_compute(&escape_start, 1, NULL);
         to_return = -1;
-        // Rewind 1 byte, so that the next packet will parse in full. If saw_escape_start_ was set
-        // during the previous Write() call, simulate the CRC.
-        if (i > 0) {
-          i--;
-        } else {
-          // Overwrite previous CRC value, since the one that was computed won't be needed.
-          uint8_t escape_start = to_integral(Escape::kEscapeStart);
-          crc_ = crc16_compute(&escape_start, 1, NULL);
-        }
+        i++;
+
         break;
       } else if (c == to_integral(Escape::kEscapeNop)) {
         continue;
+      } else if (c == to_integral(Escape::kEscapeStart)) {
+        // do nothing (allow character to be printed)
+      } else {
+        // Invalid escape sequence.
+        fprintf(stderr, "invalid escape\n");
+        to_return = -1;
+        i++;
+        break;
       }
     } else if (c == to_integral(Escape::kEscapeStart)) {
       saw_escape_start_ = true;
       continue;
+    } else {
+      saw_escape_start_ = false;
     }
 
     buffer[*bytes_filled] = c;
     (*bytes_filled)++;
+    if (*bytes_filled == buffer_size_bytes) {
+      i++;
+      break;
+    }
   }
 
-  crc_ = crc16_compute(input_, i, &crc_);
+  if (update_crc) {
+    crc_ = crc16_compute(input_, i, &crc_);
+  }
+
   input_ += i;
   input_size_bytes_ -= i;
   return to_return;
 }
 
-int Unframer::AddToBuffer(size_t buffer_full_bytes) {
+int Unframer::AddToBuffer(size_t buffer_full_bytes, bool update_crc) {
   CHECK(!is_buffer_full(buffer_full_bytes));
   return ConsumeInput(
-    &buffer_[num_buffer_bytes_valid_], buffer_full_bytes - num_buffer_bytes_valid_,
-    &num_buffer_bytes_valid_);
+    buffer_, buffer_full_bytes, &num_buffer_bytes_valid_, update_crc);
 }
 
 void Unframer::ClearBuffer() {
@@ -135,8 +156,7 @@ void Unframer::ClearBuffer() {
 }
 
 int Unframer::FindPacketLength() {
-  size_t consumed = 0;
-  int to_return = AddToBuffer(PacketFieldSizeBytes::kPayloadLength);
+  int to_return = AddToBuffer(PacketFieldSizeBytes::kPayloadLength, true);
   if (to_return != 0) {
     return to_return;
   }
@@ -147,6 +167,7 @@ int Unframer::FindPacketLength() {
 
   // TODO endian
   num_payload_bytes_remaining_ = *((uint32_t*) buffer_);
+  fprintf(stderr, "packet length: %" PRIuMAX "\n", num_payload_bytes_remaining_);
   ClearBuffer();
   state_ = State::kFindPacketCrc;
   return 0;
@@ -157,14 +178,14 @@ int Unframer::FindPacketCrc() {
   CHECK(num_buffer_bytes_valid_ == 0);
 
   while (num_payload_bytes_remaining_ > 0) {
-    size_t num_bytes_to_buffer = num_buffer_bytes_valid_;
+    size_t num_bytes_to_buffer = num_payload_bytes_remaining_;
     if (num_bytes_to_buffer > sizeof(buffer_)) {
       num_bytes_to_buffer = sizeof(buffer_);
     }
 
     size_t prev_num_buffer_bytes_valid = num_buffer_bytes_valid_;
     {
-      int to_return = AddToBuffer(num_buffer_bytes_valid_);
+      int to_return = AddToBuffer(num_bytes_to_buffer, true);
       if (to_return != 0) {
         return to_return;
       }
@@ -194,8 +215,7 @@ int Unframer::FindPacketCrc() {
 }
 
 int Unframer::FindCrcEnd() {
-  size_t consumed = 0;
-  int to_return = AddToBuffer(PacketFieldSizeBytes::kCrc);
+  int to_return = AddToBuffer(PacketFieldSizeBytes::kCrc, false);
   if (to_return != 0) {
     return to_return;
   }
@@ -208,7 +228,7 @@ int Unframer::FindCrcEnd() {
   stream_->PacketDone(crc_ == *((uint16_t*) buffer_));
   ClearBuffer();
   state_ = State::kFindPacketStart;
-  return 0;
+  return 1;
 }
 
 
@@ -229,23 +249,43 @@ int Framer::Write(const uint8_t* payload, size_t payload_size_bytes) {
 }
 
 int Framer::StartPacket(size_t payload_size_bytes) {
-  uint8_t packet_header[3 + sizeof(uint32_t)];
+  uint8_t packet_header[sizeof(uint32_t)];
   size_t ptr = 0;
   if (state_ == State::kReset) {
     packet_header[ptr] = to_integral(Escape::kEscapeNop);
     ptr++;
+    int to_return = WriteAndCrc(packet_header, ptr, false  /* escape */, false /* update_crc */);
+    if (to_return != 0) {
+      return to_return;
+    }
+
+    ptr = 0;
   }
+
   packet_header[ptr] = to_integral(Escape::kEscapeStart);
   ptr++;
   packet_header[ptr] = to_integral(Escape::kPacketStart);
   ptr++;
 
   crc_ = 0xffff;
-  memcpy((void*) &packet_header[ptr], &payload_size_bytes, sizeof(payload_size_bytes));
-  return WriteAndCrc(packet_header, sizeof(packet_header));
+  int to_return = WriteAndCrc(
+    packet_header, ptr, false  /* escape */, true  /* update_crc */);
+  if (to_return != 0) {
+    return to_return;
+  }
+
+  uint32_t payload_size_wire = payload_size_bytes;
+  to_return = WriteAndCrc(
+    (uint8_t*) &payload_size_wire, sizeof(payload_size_wire), true  /* escape */, true  /* update_crc */);
+  if (to_return == 0) {
+    state_ = State::kTransmitPacketPayload;
+    num_payload_bytes_remaining_ = payload_size_bytes;
+  }
+
+  return to_return;
 }
 
-int Framer::WriteAndCrc(const uint8_t* data, size_t data_size_bytes) {
+int Framer::WriteAndCrc(const uint8_t* data, size_t data_size_bytes, bool escape, bool update_crc) {
   size_t buffer_size = data_size_bytes;
   if (data_size_bytes > kMaxStackBufferSizeBytes) {
     buffer_size = kMaxStackBufferSizeBytes;
@@ -254,15 +294,21 @@ int Framer::WriteAndCrc(const uint8_t* data, size_t data_size_bytes) {
   while (data_size_bytes > 0) {
     uint8_t buffer[128];
     size_t buffer_ptr = 0;
-    for (size_t i = 0; i < data_size_bytes; i++) {
+    size_t i;
+    for (i = 0; i < data_size_bytes; i++) {
       uint8_t c = data[i];
-      if (c != to_integral(Escape::kEscapeStart)) {
+      if (!escape || c != to_integral(Escape::kEscapeStart)) {
         buffer[buffer_ptr] = c;
         buffer_ptr++;
+        if (buffer_ptr == buffer_size - 1) {
+          i++;
+          break;
+        }
+
         continue;
       }
 
-      if (buffer_ptr == buffer_size - 1) {
+      if (buffer_ptr == buffer_size - 2) {
         break;
       }
 
@@ -278,7 +324,12 @@ int Framer::WriteAndCrc(const uint8_t* data, size_t data_size_bytes) {
       return to_return;
     }
 
-    crc_ = crc16_compute(buffer, buffer_ptr, &crc_);
+    if (update_crc) {
+      crc_ = crc16_compute(buffer, buffer_ptr, &crc_);
+    }
+
+    data_size_bytes -= i;
+    data += i;
   }
 
   return 0;
@@ -290,7 +341,9 @@ int Framer::WritePayloadChunk(const uint8_t* payload_chunk, size_t payload_chunk
     return -1;
   }
 
-  int to_return = WriteAndCrc(payload_chunk, payload_chunk_size_bytes);
+  fprintf(stderr, "write payload chunk: %" PRIuMAX " bytes\n", payload_chunk_size_bytes);
+  int to_return = WriteAndCrc(
+    payload_chunk, payload_chunk_size_bytes, true  /* escape */, true  /* update_crc */);
   if (to_return != 0) {
     state_ = State::kReset;
     return to_return;
@@ -301,7 +354,12 @@ int Framer::WritePayloadChunk(const uint8_t* payload_chunk, size_t payload_chunk
 }
 
 int Framer::FinishPacket() {
-  int to_return = stream_->WriteAll(reinterpret_cast<uint8_t*>(&crc_), sizeof(crc_));
+  if (state_ != State::kTransmitPacketPayload || num_payload_bytes_remaining_ != 0) {
+    return -1;
+  }
+
+  int to_return = WriteAndCrc(
+    reinterpret_cast<uint8_t*>(&crc_), sizeof(crc_), true  /* escape */, false  /* update_crc */);
   if (to_return != 0) {
     state_ = State::kReset;
   } else {

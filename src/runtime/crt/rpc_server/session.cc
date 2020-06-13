@@ -24,6 +24,8 @@
 
 #include "session.h"
 #include <tvm/runtime/crt/logging.h>
+#include <cstdio>
+#include "crt_config.h"
 
 namespace tvm {
 namespace runtime {
@@ -36,13 +38,13 @@ void Session::RegenerateNonce() {
   }
 }
 
-int Session::SendInternal(PacketType packet_type, const uint8_t* packet_data, size_t packet_size_bytes) {
-  int to_return = StartPacket(packet_type, packet_size_bytes);
+int Session::SendInternal(MessageType message_type, const uint8_t* message_data, size_t message_size_bytes) {
+  int to_return = StartMessage(message_type, message_size_bytes);
   if (to_return != 0) {
     return to_return;
   }
 
-  to_return = SendPayloadChunk(packet_data, packet_size_bytes);
+  to_return = SendBodyChunk(message_data, message_size_bytes);
   if (to_return != 0) {
     return to_return;
   }
@@ -50,9 +52,9 @@ int Session::SendInternal(PacketType packet_type, const uint8_t* packet_data, si
   return framer_->FinishPacket();
 }
 
-int Session::StartPacket(PacketType packet_type, size_t packet_size_bytes) {
-  SessionHeader header{session_id_, packet_type};
-  int to_return = framer_->StartPacket(packet_size_bytes + sizeof(SessionHeader));
+int Session::StartMessage(MessageType message_type, size_t message_size_bytes) {
+  SessionHeader header{session_id_, message_type};
+  int to_return = framer_->StartPacket(message_size_bytes + sizeof(SessionHeader));
   if (to_return != 0) {
     return to_return;
   }
@@ -60,18 +62,18 @@ int Session::StartPacket(PacketType packet_type, size_t packet_size_bytes) {
   return framer_->WritePayloadChunk(reinterpret_cast<uint8_t*>(&header), sizeof(SessionHeader));
 }
 
-int Session::SendPayloadChunk(const uint8_t* payload, size_t payload_size_bytes) {
-  return framer_->WritePayloadChunk(payload, payload_size_bytes);
+int Session::SendBodyChunk(const uint8_t* chunk, size_t chunk_size_bytes) {
+  return framer_->WritePayloadChunk(chunk, chunk_size_bytes);
 }
 
-int Session::FinishPacket() {
+int Session::FinishMessage() {
   return framer_->FinishPacket();
 }
 
 int Session::StartSession() {
   RegenerateNonce();
   session_id_ = nonce_;
-  int to_return = SendInternal(PacketType::kStartSessionPacket, nullptr, 0);
+  int to_return = SendInternal(MessageType::kStartSessionMessage, nullptr, 0);
   if (to_return == 0) {
     state_ = State::kStartSessionSent;
   }
@@ -79,15 +81,19 @@ int Session::StartSession() {
   return to_return;
 }
 
-int Session::SendPacket(PacketType packet_type, const uint8_t* packet_data, size_t packet_size_bytes) {
+int Session::SendMessage(MessageType message_type, const uint8_t* message_data, size_t message_size_bytes) {
   if (state_ != State::kSessionEstablished) {
     return -1;
   }
 
-  return SendInternal(packet_type, packet_data, packet_size_bytes);
+  return SendInternal(message_type, message_data, message_size_bytes);
 }
 
 ssize_t Session::SessionReceiver::Write(const uint8_t* data, size_t data_size_bytes) {
+  if (session_->receive_buffer_has_complete_message_) {
+    return -1;
+  }
+
   size_t bytes_written = session_->receive_buffer_->Write(data, data_size_bytes);
   if (bytes_written != data_size_bytes) {
     return -1;
@@ -97,36 +103,50 @@ ssize_t Session::SessionReceiver::Write(const uint8_t* data, size_t data_size_by
 }
 
 void Session::SessionReceiver::PacketDone(bool is_valid) {
-  if (is_valid) {
-    SessionHeader header;
-    if (session_->receive_buffer_->Read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) == sizeof(header)) {
-      if (header.session_id == session_->session_id_) {
-        switch (header.packet_type) {
-        case PacketType::kStartSessionPacket:
-          session_->ProcessStartSession(header);
-          break;
-        default:
-          if (session_->state_ == State::kSessionEstablished) {
-            session_->packet_received_func_(
-              session_->packet_received_func_context_, header.packet_type, session_->receive_buffer_);
-          }
-          break;
-        }
-      } else if (header.session_id == 0 && header.packet_type == PacketType::kLogMessage) {
-        // Special case for log messages: session id can be 0.
-        session_->packet_received_func_(
-          session_->packet_received_func_context_, header.packet_type, session_->receive_buffer_);
-      }
-    }
+  if (!is_valid) {
+    return;
   }
 
-  session_->receive_buffer_->Clear();
+  SessionHeader header;
+  int bytes_read = session_->receive_buffer_->Read(
+    reinterpret_cast<uint8_t*>(&header), sizeof(header));
+  if (bytes_read != sizeof(header)) {
+    return;
+  }
+
+  session_->receive_buffer_has_complete_message_ = true;
+  fprintf(stderr, "MessageDone: %" PRIuMAX "/%" PRIuMAX "\n", session_->receive_buffer_->ReadAvailable(), session_->receive_buffer_->Size());
+  switch (header.message_type) {
+  case MessageType::kStartSessionMessage:
+    session_->ProcessStartSession(header);
+    session_->receive_buffer_has_complete_message_ = false;
+    break;
+  case MessageType::kLogMessage:
+    if (header.session_id == 0 || header.session_id == session_->session_id_) {
+      // Special case for log messages: session id can be 0.
+      session_->message_received_func_(
+        session_->message_received_func_context_, header.message_type, session_->receive_buffer_);
+    }
+    break;
+  default:
+    if (session_->state_ == State::kSessionEstablished &&
+        header.session_id == session_->session_id_) {
+      session_->message_received_func_(
+        session_->message_received_func_context_, header.message_type, session_->receive_buffer_);
+    }
+    break;
+  }
+}
+
+void Session::ClearReceiveBuffer() {
+  receive_buffer_has_complete_message_ = false;
+  receive_buffer_->Clear();
 }
 
 void Session::SendSessionStartReply(const SessionHeader& header) {
   RegenerateNonce();
   session_id_ = (header.session_id & 0xff) | (nonce_ << 8);
-  int to_return = SendInternal(PacketType::kStartSessionPacket, nullptr, 0);
+  int to_return = SendInternal(MessageType::kStartSessionMessage, nullptr, 0);
   CHECK(to_return == 0);
 }
 

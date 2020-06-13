@@ -52,6 +52,9 @@ class TransportLogger(Transport):
     self.logger = logger or _LOG
     self.level = level
 
+  # Construct PRINTABLE to exclude whitespace from string.printable.
+  PRINTABLE = (string.digits + string.ascii_letters, string.punctuation)
+
   @classmethod
   def _to_hex(cls, data):
     lines = []
@@ -62,8 +65,11 @@ class TransportLogger(Transport):
     for i in range(0, (len(data) + 15) // 16):
       chunk = data[i * 16:(i + 1) * 16]
       hex_chunk = ' '.join(f'{c:02x}' for c in chunk)
-      ascii_chunk = ''.join(chr(c) if chr(c) in string.printable else '.' for c in chunk)
-      lines.append(f'{i:4x}  {hex_chunk:47}  {ascii_chunk}')
+      ascii_chunk = ''.join(chr(c) if chr(c) in cls.PRINTABLE else '.' for c in chunk)
+      lines.append(f'{i * 16:04x}  {hex_chunk:47}  {ascii_chunk}')
+
+    if len(lines) == 1:
+      lines[0] = lines[0][6:]
 
     return lines
 
@@ -87,14 +93,14 @@ class TransportLogger(Transport):
     return data
 
   def write(self, data):
-    hex_lines = self._to_hex(data)
+    bytes_written = self.child.write(data)
+    hex_lines = self._to_hex(data[:bytes_written])
     if len(hex_lines) > 1:
-      self.logger.log(self.level, '%s write      <- [%d B]:\n%s', self.name, len(data), '\n'.join(hex_lines))
+      self.logger.log(self.level, '%s write      <- [%d B]:\n%s', self.name, bytes_written, '\n'.join(hex_lines))
     else:
-      self.logger.log(self.level, '%s write      <- [%d B]: %s', self.name, hex_lines[0])
+      self.logger.log(self.level, '%s write      <- [%d B]: %s', self.name, bytes_written, hex_lines[0])
 
-    self.child.write(data)
-    return len(data)
+    return bytes_written
 
 
 class SerialTransport(Transport):
@@ -146,20 +152,19 @@ class SubprocessTransport(Transport):
   def open(self):
     self.kw['stdout'] = subprocess.PIPE
     self.kw['stdin'] = subprocess.PIPE
+    self.kw['bufsize'] = 0
     self.popen = subprocess.Popen(self.args, **self.kw)
     self.stdin = self.popen.stdin
     self.stdout = self.popen.stdout
 
   def write(self, data):
-    self.stdin.write(data)
+    to_return = self.stdin.write(data)
     self.stdin.flush()
 
-  def read(self, n):
-    data = bytearray()
-    while len(data) < n:
-      data += self.stdout.read(n)
+    return to_return
 
-    return data
+  def read(self, n):
+    return self.stdout.read(128)
 
   def close(self):
     self.stdin.close()

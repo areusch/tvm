@@ -33,9 +33,10 @@ namespace runtime {
 
 class Buffer {
  public:
-  Buffer(uint8_t* data, size_t data_size_bytes) :
-      data_{data}, capacity_{data_size_bytes}, num_valid_bytes_{0},
-      read_cursor_{0} {}
+  Buffer(uint8_t* data, size_t data_size_bytes) : data_{data},
+                                                  capacity_{data_size_bytes},
+                                                  num_valid_bytes_{0},
+                                                  read_cursor_{0} {}
 
   size_t Write(const uint8_t* data, size_t data_size_bytes);
 
@@ -44,6 +45,10 @@ class Buffer {
   size_t Peek(uint8_t* data, size_t data_size_bytes);
 
   void Clear();
+
+  inline size_t ReadAvailable() const {
+    return num_valid_bytes_ - read_cursor_;
+  }
 
   inline size_t Size() const {
     return num_valid_bytes_;

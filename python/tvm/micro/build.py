@@ -1,3 +1,4 @@
+import copy
 import glob
 import logging
 import os
@@ -70,7 +71,7 @@ def _generate_mod_wrapper(src_path):
     wrapper_f.write('\n'.join(lines))
 
 
-CRT_RUNTIME_LIB_NAMES = ['common', 'rpc_server'] #, 'host']
+CRT_RUNTIME_LIB_NAMES = ['common', 'rpc_server']
 
 
 TVM_ROOT_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -87,6 +88,18 @@ RUNTIME_LIB_SRC_DIRS = (
 
 RUNTIME_SRC_REGEX = re.compile('^.*\.cc?$', re.IGNORECASE)
 
+
+_CRT_DEFAULT_OPTIONS = {
+  'ccflags': ['-std=c++11'],
+  'include_dirs': [f'{TVM_ROOT_DIR}/include',
+                   f'{TVM_ROOT_DIR}/3rdparty/dlpack/include',
+                   f'{TVM_ROOT_DIR}/3rdparty/mbed-os/targets/TARGET_NORDIC/TARGET_NRF5x/TARGET_SDK_11/libraries/crc16/',
+                   f'{TVM_ROOT_DIR}/3rdparty/dmlc-core/include'],
+}
+
+
+def DefaultOptions():
+  return copy.deepcopy(_CRT_DEFAULT_OPTIONS)
 
 
 def build_static_runtime(workspace, compiler, module, lib_opts=None, bin_opts=None):
@@ -111,8 +124,8 @@ def build_static_runtime(workspace, compiler, module, lib_opts=None, bin_opts=No
   MicroBinary :
       The compiled runtime.
   """
-  lib_opts = {} if lib_opts is None else lib_opts
-  bin_opts = {} if bin_opts is None else bin_opts
+  lib_opts = _CRT_DEFAULT_OPTIONS if lib_opts is None else lib_opts
+  bin_opts = _CRT_DEFAULT_OPTIONS if bin_opts is None else bin_opts
 
   crt_path = os.path.realpath(
     os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src', 'runtime', 'crt'))
@@ -123,8 +136,6 @@ def build_static_runtime(workspace, compiler, module, lib_opts=None, bin_opts=No
   os.makedirs(mod_src_dir)
   mod_src_path = os.path.join(mod_src_dir, 'module.c')
   module.save(mod_src_path, 'cc')
-  print('ls', module)
-  os.system(f'ls {mod_src_dir}')
 
 #  mod_wrapper_path = os.path.join(mod_src_dir, 'module-wrapper.c')
   _generate_mod_wrapper(mod_src_path)

@@ -462,12 +462,14 @@ struct RPCReference {
 
     uint64_t packet_nbytes = sizeof(code) + sizeof(num_args) + sizeof(tcode) + sizeof(len) + len;
 
+    channel->MessageStart(packet_nbytes);
     channel->Write(packet_nbytes);
     channel->Write(code);
     channel->Write(num_args);
     channel->Write(tcode);
     channel->Write(len);
     channel->WriteArray(msg, len);
+    channel->MessageDone();
   }
 
   /*!
@@ -485,9 +487,11 @@ struct RPCReference {
     uint64_t packet_nbytes =
         sizeof(code) + PackedSeqGetNumBytes(arg_values, type_codes, num_args, false, channel);
 
+    channel->MessageStart(packet_nbytes);
     channel->Write(packet_nbytes);
     channel->Write(code);
     SendPackedSeq(arg_values, type_codes, num_args, false, channel);
+    channel->MessageDone();
   }
 
   /*!
@@ -504,10 +508,12 @@ struct RPCReference {
 
     uint64_t packet_nbytes = sizeof(code) + sizeof(num_args) + sizeof(tcode);
 
+    channel->MessageStart(packet_nbytes);
     channel->Write(packet_nbytes);
     channel->Write(code);
     channel->Write(num_args);
     channel->Write(tcode);
+    channel->MessageDone();
   }
 };
 
