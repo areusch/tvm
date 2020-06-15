@@ -51,12 +51,10 @@ class MicroIOHandler {
       session_{session}, receive_buffer_{receive_buffer} {}
 
   void MessageStart(size_t message_size_bytes) {
-    fprintf(stderr, "utvm: start message (%" PRIuMAX " bytes)\n", message_size_bytes);
     session_->StartMessage(MessageType::kNormalTraffic, message_size_bytes + 8);
   }
 
   ssize_t PosixWrite(const uint8_t* buf, size_t buf_size_bytes) {
-    fprintf(stderr, "utvm: posix write: %" PRIuMAX "\n", buf_size_bytes);
     int to_return = session_->SendBodyChunk(buf, buf_size_bytes);
     if (to_return < 0) {
       return to_return;
@@ -65,7 +63,6 @@ class MicroIOHandler {
   }
 
   void MessageDone() {
-    fprintf(stderr, "utvm: done message\n");
     CHECK(session_->FinishMessage() == 0);
   }
 

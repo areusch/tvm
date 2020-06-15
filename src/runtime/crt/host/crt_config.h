@@ -57,5 +57,4 @@
 /*! \brief Number of pages on device. */
 #define TVM_CRT_MAX_PAGES 300
 
-
 #endif  // TVM_RUNTIME_CRT_CONFIG_H_

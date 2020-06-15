@@ -34,9 +34,9 @@ namespace tvm {
 namespace runtime {
 
 enum class MessageType : uint8_t {
-  kStartSessionMessage = 0,
-  kNormalTraffic = 1,
-  kLogMessage = 2,
+  kStartSessionMessage = 0x00,
+  kLogMessage = 0x01,
+  kNormalTraffic = 0x10,
 };
 
 typedef struct SessionHeader {

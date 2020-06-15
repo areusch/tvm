@@ -36,7 +36,7 @@ namespace runtime {
 enum class Escape : uint8_t {
   kEscapeStart = 0xff,
   kEscapeNop = 0xfe,
-  kPacketStart = 0xfd,
+  kPacketStart = 0xfd
 };
 
 class PacketFieldSizeBytes {
@@ -73,6 +73,9 @@ class Unframer {
 //PayloadWriteFunc write_func,
   /*! \brief Reset unframer to initial state. */
   void Reset();
+
+  /*! \brief Return an underestimate of the number of bytes needed from the wire. */
+  size_t BytesNeeded();
 
  private:
   int FindPacketStart();

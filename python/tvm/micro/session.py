@@ -1,3 +1,5 @@
+import time
+
 from .base import _rpc_connect
 from ..rpc import RPCSession
 from .transport import TransportLogger
@@ -57,6 +59,7 @@ class Session:
         """
         if self.flasher is not None:
             self.transport_context_manager = self.flasher.Flash(self.binary)
+            time.sleep(3.0)
 
         self.transport = TransportLogger(
             self.session_name, self.transport_context_manager).__enter__()

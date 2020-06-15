@@ -254,7 +254,10 @@ class Flasher(tvm.micro.Flasher):
     mbed_os_tools.test.host_tests_toolbox.flash_dev(
         self._devices[0]['mount_point'], bin_file, program_cycle_s=4)
 
-    serial_transport = tvm.micro.SerialTransport(port_path=self._devices[0]['serial_port'], baudrate=115200)
+    return self.Transport(micro_binary)
+
+  def Transport(self, micro_binary=None):
+    serial_transport = tvm.micro.SerialTransport(port_path=self._devices[0]['serial_port'], baudrate=115200, rtscts=True)
     if self._debug:
       return tvm.micro.DebugWrapperTransport(
         debugger=tvm.micro.GdbRemoteDebugger(self._debug_gdb_binary, self._debug_remote_hostport,

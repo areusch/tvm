@@ -27,8 +27,16 @@
 #include <type_traits>
 #include <string.h>
 #include <tvm/runtime/crt/logging.h>
-#include <cstdio>
 #include "crt_config.h"
+
+// For debugging purposes, Framer logs can be enabled, but this should only be done when
+// running from the host.
+#ifdef TVM_CRT_FRAMER_ENABLE_LOGS
+#include <cstdio>
+#define TVM_FRAMER_DEBUG_LOG(msg, ...)  fprintf(stderr, "utvm framer: " msg " \n", ##__VA_ARGS__)
+#else
+#define TVM_FRAMER_DEBUG_LOG(msg, ...)
+#endif
 
 namespace tvm {
 namespace runtime {
@@ -116,7 +124,7 @@ int Unframer::ConsumeInput(uint8_t* buffer, size_t buffer_size_bytes, size_t* by
         // do nothing (allow character to be printed)
       } else {
         // Invalid escape sequence.
-        fprintf(stderr, "invalid escape\n");
+        TVMLogf("invalid escape: %02x\n", c);
         to_return = -1;
         i++;
         break;
@@ -167,7 +175,6 @@ int Unframer::FindPacketLength() {
 
   // TODO endian
   num_payload_bytes_remaining_ = *((uint32_t*) buffer_);
-  fprintf(stderr, "packet length: %" PRIuMAX "\n", num_payload_bytes_remaining_);
   ClearBuffer();
   state_ = State::kFindPacketCrc;
   return 0;
@@ -341,7 +348,7 @@ int Framer::WritePayloadChunk(const uint8_t* payload_chunk, size_t payload_chunk
     return -1;
   }
 
-  fprintf(stderr, "write payload chunk: %" PRIuMAX " bytes\n", payload_chunk_size_bytes);
+  TVM_FRAMER_DEBUG_LOG("write payload chunk: %" PRIuMAX " bytes\n", payload_chunk_size_bytes);
   int to_return = WriteAndCrc(
     payload_chunk, payload_chunk_size_bytes, true  /* escape */, true  /* update_crc */);
   if (to_return != 0) {

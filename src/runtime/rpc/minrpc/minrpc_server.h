@@ -90,7 +90,7 @@ class MinRPCServer {
 
     allow_clean_shutdown_ = false;
 
-    TVMLogf("ProcessOnePacket code=%s\n", RPCCodeToString(code));
+    LOG_DEBUG("ProcessOnePacket code=%s\n", RPCCodeToString(code));
     if (code >= RPCCode::kSyscallCodeStart) {
       this->HandleSyscallFunc(code);
     } else {
@@ -389,7 +389,7 @@ class MinRPCServer {
     DLDataType type_hint = values[3].v_type;
 
     void* handle;
-    TVMLogf("TVMDeviceAllocDataSpace(%" PRIuPTR ", %" PRId64 ", %" PRId64 ")", ctx, nbytes, alignment);
+    LOG_DEBUG("TVMDeviceAllocDataSpace(%" PRId64 ", %" PRId64 ")", nbytes, alignment);
     int call_ecode = TVMDeviceAllocDataSpace(ctx, nbytes, alignment, type_hint, &handle);
 
     if (call_ecode == 0) {
@@ -536,7 +536,7 @@ class MinRPCServer {
     RPCCode code = RPCCode::kReturn;
     uint64_t encode_handle = reinterpret_cast<uint64_t>(handle);
 
-    TVMLogf("Return handle: %p", handle);
+    LOG_DEBUG("Return handle: %p", handle);
     uint64_t packet_nbytes =
         sizeof(code) + sizeof(num_args) + sizeof(tcode) + sizeof(encode_handle);
 

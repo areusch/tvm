@@ -32,9 +32,11 @@
 #include <string.h>
 
 #include <tvm/runtime/c_runtime_api.h>
+#include <tvm/runtime/crt/logging.h>
 #include <tvm/runtime/crt/memory.h>
+#include <tvm/runtime/crt/platform.h>
 
-#include "logging.h"
+#include "crt_config.h"
 #include "memory_internal.h"
 
 /*! \brief A page in the DRAM */

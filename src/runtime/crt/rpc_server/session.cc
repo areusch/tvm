@@ -24,7 +24,6 @@
 
 #include "session.h"
 #include <tvm/runtime/crt/logging.h>
-#include <cstdio>
 #include "crt_config.h"
 
 namespace tvm {
@@ -54,6 +53,10 @@ int Session::SendInternal(MessageType message_type, const uint8_t* message_data,
 
 int Session::StartMessage(MessageType message_type, size_t message_size_bytes) {
   SessionHeader header{session_id_, message_type};
+  if (state_ != State::kSessionEstablished && message_type == MessageType::kLogMessage) {
+    header.session_id = 0;
+  }
+
   int to_return = framer_->StartPacket(message_size_bytes + sizeof(SessionHeader));
   if (to_return != 0) {
     return to_return;
@@ -82,7 +85,7 @@ int Session::StartSession() {
 }
 
 int Session::SendMessage(MessageType message_type, const uint8_t* message_data, size_t message_size_bytes) {
-  if (state_ != State::kSessionEstablished) {
+  if (state_ != State::kSessionEstablished && message_type != MessageType::kLogMessage) {
     return -1;
   }
 
@@ -115,7 +118,10 @@ void Session::SessionReceiver::PacketDone(bool is_valid) {
   }
 
   session_->receive_buffer_has_complete_message_ = true;
-  fprintf(stderr, "MessageDone: %" PRIuMAX "/%" PRIuMAX "\n", session_->receive_buffer_->ReadAvailable(), session_->receive_buffer_->Size());
+  // LOG_DEBUG("MessageDone: %zu/%zu",
+  //           session_->receive_buffer_->ReadAvailable(),
+  //           session_->receive_buffer_->Size());
+
   switch (header.message_type) {
   case MessageType::kStartSessionMessage:
     session_->ProcessStartSession(header);

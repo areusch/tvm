@@ -1,4 +1,5 @@
 import abc
+import atexit
 import contextlib
 import logging
 import os
@@ -53,7 +54,7 @@ class TransportLogger(Transport):
     self.level = level
 
   # Construct PRINTABLE to exclude whitespace from string.printable.
-  PRINTABLE = (string.digits + string.ascii_letters, string.punctuation)
+  PRINTABLE = (string.digits + string.ascii_letters + string.punctuation)
 
   @classmethod
   def _to_hex(cls, data):
@@ -65,7 +66,7 @@ class TransportLogger(Transport):
     for i in range(0, (len(data) + 15) // 16):
       chunk = data[i * 16:(i + 1) * 16]
       hex_chunk = ' '.join(f'{c:02x}' for c in chunk)
-      ascii_chunk = ''.join(chr(c) if chr(c) in cls.PRINTABLE else '.' for c in chunk)
+      ascii_chunk = ''.join((chr(c) if chr(c) in cls.PRINTABLE else '.') for c in chunk)
       lines.append(f'{i * 16:04x}  {hex_chunk:47}  {ascii_chunk}')
 
     if len(lines) == 1:
@@ -105,6 +106,19 @@ class TransportLogger(Transport):
 
 class SerialTransport(Transport):
 
+    _OPEN_PORTS = []
+
+    @classmethod
+    def close_atexit(cls):
+        for port in cls._OPEN_PORTS:
+            try:
+                port.close()
+            except Exception:
+                _LOG.warn('exception closing port', exc_info=True)
+                pass
+
+        cls._OPEN_PORTS = []
+
     def __init__(self, grep=None, port_path=None, **kw):
         self._port_path = port_path
         self._grep = grep
@@ -124,22 +138,25 @@ class SerialTransport(Transport):
             port_path = ports[0].device
 
         self._port = serial.Serial(port_path, **self._kw)
-        c = self._port.read(1)
-        while c != b'\n':
-          print('read', c)
-          c = self._port.read(1)
+        self._OPEN_PORTS.append(self._port)
+        import time
+        time.sleep(1.1)
 
     def close(self):
         self._port.close()
+        self._OPEN_PORTS.remove(self._port)
         self._port = None
 
     def read(self, n):
-        return self._port.read(n)
+        print('read', n)
+        return self._port.read(1)
 
     def write(self, data):
         to_return = self._port.write(data)
         self._port.flush()
         return to_return
+
+atexit.register(SerialTransport.close_atexit)
 
 
 class SubprocessTransport(Transport):
@@ -164,7 +181,7 @@ class SubprocessTransport(Transport):
     return to_return
 
   def read(self, n):
-    return self.stdout.read(128)
+    return self.stdout.read(n)
 
   def close(self):
     self.stdin.close()
