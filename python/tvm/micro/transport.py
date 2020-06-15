@@ -110,6 +110,7 @@ class SerialTransport(Transport):
 
     @classmethod
     def close_atexit(cls):
+        print('*** CLOSING PORTS!')
         for port in cls._OPEN_PORTS:
             try:
                 port.close()
@@ -137,22 +138,36 @@ class SerialTransport(Transport):
 
             port_path = ports[0].device
 
-        self._port = serial.Serial(port_path, **self._kw)
+        self._port = serial.Serial(port_path, timeout=0.1, **self._kw)
+        self._port.cancel_read()
         self._OPEN_PORTS.append(self._port)
-        import time
-        time.sleep(1.1)
+#        import time
+#        time.sleep(1.1)
 
     def close(self):
+        print(' *** PORT CLOSED! *** ')
         self._port.close()
         self._OPEN_PORTS.remove(self._port)
         self._port = None
 
     def read(self, n):
-        print('read', n)
-        return self._port.read(1)
+        to_return = bytearray()
+        while not to_return:
+            to_return.extend(self._port.read(n))
+
+        while True:
+            this_round = self._port.read(n - len(to_return))
+            if not this_round:
+                break
+            to_return.extend(this_round)
+
+        return to_return
 
     def write(self, data):
-        to_return = self._port.write(data)
+        to_return = 0
+        while to_return == 0:
+            to_return = self._port.write(data)
+
         self._port.flush()
         return to_return
 

@@ -105,9 +105,16 @@ class MicroTransportChannel : public RPCChannel {
   }
 
   size_t Send(const void* data, size_t size) override {
+    const uint8_t* data_bytes = static_cast<const uint8_t*>(data);
     std::cout << "send " << size << " bytes" << std::endl;
-    ssize_t ret = session_.SendMessage(MessageType::kNormalTraffic, static_cast<const uint8_t*>(data), size);
-    CHECK(ret >= 0) << "SendMessage returned " << ret;
+    size_t to_write = 0;
+    while (to_write > 0) {
+      ssize_t ret = session_.SendMessage(MessageType::kNormalTraffic, data_bytes, size);
+      CHECK(ret > 0) << "SendMessage returned " << ret;
+      to_write += ret;
+      data_bytes += ret;
+    }
+
     return size;
   }
 
