@@ -293,13 +293,8 @@ int Framer::StartPacket(size_t payload_size_bytes) {
 }
 
 int Framer::WriteAndCrc(const uint8_t* data, size_t data_size_bytes, bool escape, bool update_crc) {
-  size_t buffer_size = data_size_bytes;
-  if (data_size_bytes > kMaxStackBufferSizeBytes) {
-    buffer_size = kMaxStackBufferSizeBytes;
-  }
-
   while (data_size_bytes > 0) {
-    uint8_t buffer[128];
+    uint8_t buffer[kMaxStackBufferSizeBytes];
     size_t buffer_ptr = 0;
     size_t i;
     for (i = 0; i < data_size_bytes; i++) {
@@ -307,7 +302,7 @@ int Framer::WriteAndCrc(const uint8_t* data, size_t data_size_bytes, bool escape
       if (!escape || c != to_integral(Escape::kEscapeStart)) {
         buffer[buffer_ptr] = c;
         buffer_ptr++;
-        if (buffer_ptr == buffer_size - 1) {
+        if (buffer_ptr == kMaxStackBufferSizeBytes - 1) {
           i++;
           break;
         }
@@ -315,7 +310,7 @@ int Framer::WriteAndCrc(const uint8_t* data, size_t data_size_bytes, bool escape
         continue;
       }
 
-      if (buffer_ptr == buffer_size - 2) {
+      if (buffer_ptr == kMaxStackBufferSizeBytes - 2) {
         break;
       }
 

@@ -122,7 +122,7 @@ class MinRPCServer {
       }
     }
 
-    fprintf(stderr, "return from ProcessPacket\n");
+    TVMLogf("return from ProcessPacket");
     return true;
   }
 

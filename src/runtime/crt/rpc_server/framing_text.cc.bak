@@ -9,4 +9,4 @@ TEST_F(FramingTest, TestResetDuringPacketStart) {
 }
 
 
-TEST_F(FramingTest, Test
+TEST_F(FramingTest, TestEscapeCodeDuring

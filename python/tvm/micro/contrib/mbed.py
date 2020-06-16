@@ -257,7 +257,7 @@ class Flasher(tvm.micro.Flasher):
     return self.Transport(micro_binary)
 
   def Transport(self, micro_binary=None):
-    serial_transport = tvm.micro.SerialTransport(port_path=self._devices[0]['serial_port'], baudrate=115200, rtscts=True)
+    serial_transport = tvm.micro.SerialTransport(port_path=self._devices[0]['serial_port'], baudrate=9600)
     if self._debug:
       return tvm.micro.DebugWrapperTransport(
         debugger=tvm.micro.GdbRemoteDebugger(self._debug_gdb_binary, self._debug_remote_hostport,

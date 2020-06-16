@@ -71,9 +71,15 @@ def test_compile_runtime():
     else:
       sess = exit_stack.enter_context(tvm.micro.Session(transport_context_manager=flasher.Transport()))
     A_data = tvm.nd.array(numpy.array([2, 3], dtype='int8'), ctx=sess.context)
-    B_data = tvm.nd.array(numpy.array([4], dtype='int8'), ctx=sess.context)
-    C_data = tvm.nd.array(numpy.array([0, 0], dtype='int8'), ctx=sess.context)
+    assert (A_data.asnumpy() == numpy.array([2, 3])).all()
 
+    B_data = tvm.nd.array(numpy.array([4], dtype='int8'), ctx=sess.context)
+    assert (B_data.asnumpy() == numpy.array([4])).all()
+
+    C_data = tvm.nd.array(numpy.array([0, 0], dtype='int8'), ctx=sess.context)
+    assert (C_data.asnumpy() == numpy.array([0, 0])).all()
+
+    print('get system lib')
     system_lib = sess._rpc.system_lib()
 #    system_lib_func = sess._rpc.get_function('get_system_lib')
 #    system_lib = system_lib_func()
