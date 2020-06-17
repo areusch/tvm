@@ -64,7 +64,7 @@ class ManagedSubprocess:
                log_file_path : typing.Optional[str] = None,
                log_event_emitter : typing.Callable[[str], typing.Iterator[typing.Tuple[LogEventType, dict]]] = None,
                healthy_timeout_sec : typing.Optional[float] = None,
-               stop_signal=signal.SIGINT,
+               stop_signal=signal.SIGTERM,
                stop_timeout_sec : float = 5.0):
     """Configure, but don't start, a new managed subprocess.
 
@@ -224,7 +224,7 @@ class ManagedSubprocess:
       out_to_logfile = open(self._log_file_path, 'w')
 
     self._proc = subprocess.Popen(
-      self._args, cwd=self._cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      self._args, cwd=self._cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
 
     with self.LIVE_INSTANCES_GUARD:
       self.LIVE_INSTANCES.append(self)

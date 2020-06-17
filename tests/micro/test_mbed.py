@@ -30,11 +30,14 @@ def test_compile_runtime():
 
   workspace = tvm.micro.Workspace(debug=True)
 
+  rpc_session = tvm.rpc.connect('127.0.0.1', 9090)
   project_dir = '/Users/andrew/ws/stm-nucleo/test'
   compiler = mbed.MbedCompiler(
     project_dir=project_dir,
     mbed_target='NUCLEO_F746ZG',
-    mbed_toolchain='GCC_ARM')
+    mbed_toolchain='GCC_ARM',
+    debug_rpc_session=rpc_session,
+  )
 
   root_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..'))
   bin_opts = tvm.micro.DefaultOptions()
@@ -69,7 +72,8 @@ def test_compile_runtime():
     if BUILD:
       sess = exit_stack.enter_context(tvm.micro.Session(binary=micro_binary, flasher=flasher))
     else:
-      sess = exit_stack.enter_context(tvm.micro.Session(transport_context_manager=flasher.Transport()))
+      sess = exit_stack.enter_context(tvm.micro.Session(transport_context_manager=flasher.Transport(
+        micro_binary=tvm.micro.MicroBinary('/private/var/folders/9y/3j808g591ln3kys4qpyl3qmc0000gn/T/tvm-debug-mode-tempdirs/2020-06-16T17-42-32___fa8goneh/00000/build/runtime', 'runtime.bin', debug_files=['runtime.elf']))))
     A_data = tvm.nd.array(numpy.array([2, 3], dtype='int8'), ctx=sess.context)
     assert (A_data.asnumpy() == numpy.array([2, 3])).all()
 
@@ -86,7 +90,7 @@ def test_compile_runtime():
     print('got system lib', system_lib)
     system_lib.get_function('add')(A_data, B_data, C_data)
     print('got data!', C_data.asnumpy())
-    assert C_data.asnumpy() == numpy.array([6, 7])
+    assert (C_data.asnumpy() == numpy.array([6, 7])).all()
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ import os
 import signal
 import string
 import subprocess
+import time
 import typing
 
 import serial
@@ -140,6 +141,8 @@ class SerialTransport(Transport):
 
         self._port = serial.Serial(port_path, timeout=0.1, **self._kw)
         self._port.cancel_read()
+        self._port.reset_input_buffer()
+        self._port.reset_output_buffer()
         self._OPEN_PORTS.append(self._port)
 #        import time
 #        time.sleep(1.1)
@@ -164,12 +167,15 @@ class SerialTransport(Transport):
         return to_return
 
     def write(self, data):
-        to_return = 0
-        while to_return == 0:
-            to_return = self._port.write(data)
+        # NOTE(areusch): Due to suspected flaky ST-Link VCP OS X driver, write 1 byte at a time.
+        total_written = 0
+        while len(data) > 0:
+          num = self._port.write(data[:1])
+          data = data[num:]
+          assert num > 0
+          total_written += num
 
-        self._port.flush()
-        return to_return
+        return total_written
 
 atexit.register(SerialTransport.close_atexit)
 
@@ -209,6 +215,7 @@ class DebugWrapperTransport(Transport):
   def __init__(self, debugger, transport):
     self.debugger = debugger
     self.transport = transport
+    self.debugger.on_terminate_callbacks.append(self.transport.close)
 
   def open(self):
     self.debugger.Start()

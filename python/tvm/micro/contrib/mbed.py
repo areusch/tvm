@@ -57,7 +57,8 @@ class MbedCompiler(tvm.micro.Compiler):
       return value
 
   def __init__(self, bootstrap_url=None, project_dir=None, mbed_tool_entrypoint=None,
-               mbed_target=None, mbed_toolchain=None, compiler_path=None, debug=False):
+               mbed_target=None, mbed_toolchain=None, compiler_path=None, debug=False,
+               debug_rpc_session=None):
     self._mbed_tool_entrypoint = mbed_tool_entrypoint
     if self._mbed_tool_entrypoint is None:
       self._mbed_tool_entrypoint = [sys.executable, '-mmbed']
@@ -99,6 +100,7 @@ class MbedCompiler(tvm.micro.Compiler):
         self._invoke_mbed(['config', f'{mbed_toolchain}_PATH'])
 
     self.debug = debug
+    self._debug_rpc_session = debug_rpc_session
 
   SOURCE_EXTS = ['s', 'c', 'cc', 'cpp', 'o', 'a']
 
@@ -205,7 +207,7 @@ class MbedCompiler(tvm.micro.Compiler):
       output, f'{artifact_name}.bin', debug_files=[f'{artifact_name}.elf'])
 
   def Flasher(self, **kw):
-    return Flasher(self._mbed_target, **kw)
+    return Flasher(self._mbed_target, debug_rpc_session=self._debug_rpc_session, **kw)
 
   def _invoke_mbed(self, args):
     try:
@@ -219,11 +221,13 @@ class MbedCompiler(tvm.micro.Compiler):
 
 class Flasher(tvm.micro.Flasher):
 
-  def __init__(self, mbed_target, target_serial_number=None, debug=False, debug_remote_hostport=None,
-               debug_gdb_binary='arm-none-eabi-gdb', debug_wrapping_context_manager=None):
+  def __init__(self, mbed_target, target_serial_number=None, debug=False, debug_rpc_session=None,
+               debug_remote_hostport=None, debug_gdb_binary='arm-none-eabi-gdb',
+               debug_wrapping_context_manager=None):
     self._mbed_target = mbed_target
     self._target_serial_number = target_serial_number
     self._debug = debug
+    self._debug_rpc_session = debug_rpc_session
     self._debug_remote_hostport = debug_remote_hostport
     self._debug_gdb_binary = debug_gdb_binary
     self._debug_wrapping_context_manager = debug_wrapping_context_manager
@@ -257,12 +261,24 @@ class Flasher(tvm.micro.Flasher):
     return self.Transport(micro_binary)
 
   def Transport(self, micro_binary=None):
-    serial_transport = tvm.micro.SerialTransport(port_path=self._devices[0]['serial_port'], baudrate=9600)
+    serial_transport = tvm.micro.SerialTransport(port_path=self._devices[0]['serial_port'].replace('tty.', 'cu.'), baudrate=115200)
     if self._debug:
+      gdb_remote_debugger_args = [
+        self._debug_gdb_binary,
+        self._debug_remote_hostport,
+        micro_binary.abspath(micro_binary.debug_files[0]),
+      ]
+      gdb_remote_debugger_kw = {'wrapping_context_manager': self._debug_wrapping_context_manager}
+
+      if self._debug_rpc_session:
+        debugger = tvm.micro.RpcDebugger(
+          self._debug_rpc_session, 'tvm.micro.GdbRemoteDebugger', *gdb_remote_debugger_args,
+          **gdb_remote_debugger_kw)
+      else:
+        debugger = tvm.micro.GdbRemoteDebugger(*gdb_remote_debugger_args, **gdb_remote_debugger_kw)
+
       return tvm.micro.DebugWrapperTransport(
-        debugger=tvm.micro.GdbRemoteDebugger(self._debug_gdb_binary, self._debug_remote_hostport,
-                                             micro_binary.abspath(micro_binary.debug_files[0]),
-                                             wrapping_context_manager=self._debug_wrapping_context_manager),
+        debugger=debugger,
         transport=serial_transport)
 
     return serial_transport

@@ -1,12 +1,18 @@
 import abc
+import importlib
 import os
 import signal
 import subprocess
 import threading
+
+from .. import register_func, register_object
 from . import transport
 
 
 class Debugger(metaclass=abc.ABCMeta):
+
+  def __init__(self, *args, **kw):
+    self.on_terminate_callbacks = []
 
   @abc.abstractmethod
   def Start(self):
@@ -29,12 +35,24 @@ class GdbDebugger(Debugger):
   def PopenKwargs(self):
     raise NotImplementedError()
 
+  def _WaitRestoreSignal(self):
+    self.popen.wait()
+    if not self.did_terminate.is_set():
+      for cb in self.on_terminate_callbacks:
+        try:
+          cb()
+        except Exception:
+          logging.warn('on_terminate_callback raised exception', exc_info=True)
+
   def Start(self):
     kw = self.PopenKwargs()
+    self.did_terminate = threading.Event()
     self.old_signal = signal.signal(signal.SIGINT, signal.SIG_IGN)
     self.popen = subprocess.Popen(**kw)
+    threading.Thread(target=self._WaitRestoreSignal).start()
 
   def Stop(self):
+    self.did_terminate.set()
     self.popen.terminate()
     signal.signal(signal.SIGINT, self.old_signal)
 
@@ -47,6 +65,7 @@ class GdbTransportDebugger(GdbDebugger):
   """
 
   def __init__(self, args, **popen_kw):
+    super(GdbTransportDebugger, self).__init__()
     self.args = args
     self.popen_kw = popen_kw
 
@@ -116,6 +135,7 @@ class GdbTransportDebugger(GdbDebugger):
 class GdbRemoteDebugger(GdbDebugger):
 
   def __init__(self, gdb_binary, remote_hostport, debug_binary, wrapping_context_manager=None, **popen_kw):
+    super(GdbRemoteDebugger, self).__init__()
     self.gdb_binary = gdb_binary
     self.remote_hostport = remote_hostport
     self.debug_binary = debug_binary
@@ -133,11 +153,65 @@ class GdbRemoteDebugger(GdbDebugger):
     return kw
 
   def Start(self):
-    self.wrapping_context_manager.__enter__()
+    if self.wrapping_context_manager is not None:
+      self.wrapping_context_manager.__enter__()
     super(GdbRemoteDebugger, self).Start()
 
   def Stop(self):
     try:
       super(GdbRemoteDebugger, self).Stop()
+    finally:
+      if self.wrapping_context_manager is not None:
+        self.wrapping_context_manager.__exit__(None, None, None)
+
+
+GLOBAL_DEBUGGER = None
+
+
+@register_func("tvm.micro.debugger.LaunchDebugger")
+def LaunchDebuggger(debugger_class_path, *args, **kw):
+  print('launch debugger')
+  global GLOBAL_DEBUGGER
+  if GLOBAL_DEBUGGER is not None:
+    StopDebugger()
+
+  debugger_package_name, debugger_class_name = debugger_class_path.rsplit('.', 1)
+  debugger_package = importlib.import_module(debugger_package_name)
+  debugger_class = getattr(debugger_package, debugger_class_name)
+  assert issubclass(debugger_class, Debugger), (
+    f'debugger_class_path must specify a subclass of Debugger, got {debugger_class_path}')
+  GLOBAL_DEBUGGER = debugger_class(*args, **kw)
+  GLOBAL_DEBUGGER.Start()
+
+
+@register_func("tvm.micro.debugger.StopDebugger")
+def StopDebugger():
+  global GLOBAL_DEBUGGER
+  if GLOBAL_DEBUGGER is not None:
+    try:
+      GLOBAL_DEBUGGER.Stop()
+    finally:
+      GLOBAL_DEBUGGER = None
+
+
+class RpcDebugger(Debugger):
+
+  def __init__(self, rpc_session, debugger_class_path, *args, wrapping_context_manager=None, **kw):
+    super(RpcDebugger, self).__init__()
+    self.debugger_class_path = debugger_class_path
+    self._args = args
+    self._kw = kw
+    self.launch_debugger = rpc_session.get_function('tvm.micro.debugger.LaunchDebugger')
+    self.stop_debugger = rpc_session.get_function('tvm.micro.debugger.StopDebugger')
+    self.wrapping_context_manager = wrapping_context_manager
+
+  def Start(self):
+    self.wrapping_context_manager.__enter__()
+    self.launch_debugger(self.debugger_class_path, *self._args, **self._kw)
+    input('Press [Enter] when debugger is set')
+
+  def Stop(self):
+    try:
+      self.stop_debugger()
     finally:
       self.wrapping_context_manager.__exit__(None, None, None)
