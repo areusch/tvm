@@ -27,9 +27,9 @@
 #include <dlpack/dlpack.h>
 
 #include "load_json.h"
-#include "module.h"
-#include "ndarray.h"
-#include "packed_func.h"
+#include "../common/module.h"
+#include "../common/ndarray.h"
+#include "../common/packed_func.h"
 
 /*! \brief operator attributes about tvm op */
 typedef struct TVMOpParam {

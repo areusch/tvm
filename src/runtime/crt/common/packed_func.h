@@ -21,8 +21,8 @@
  * \file tvm/runtime/packed_func.h
  * \brief Type-erased function used across TVM API.
  */
-#ifndef TVM_RUNTIME_CRT_PACKED_FUNC_H_
-#define TVM_RUNTIME_CRT_PACKED_FUNC_H_
+#ifndef TVM_RUNTIME_CRT_COMMON_PACKED_FUNC_H_
+#define TVM_RUNTIME_CRT_COMMON_PACKED_FUNC_H_
 
 #include <assert.h>
 #include <stdio.h>
@@ -141,4 +141,4 @@ static inline void TVMModule_GetFunction(TVMModule* mod, const char* name, TVMPa
   }
 }
 
-#endif  // TVM_RUNTIME_CRT_PACKED_FUNC_H_
+#endif  // TVM_RUNTIME_CRT_COMMON_PACKED_FUNC_H_

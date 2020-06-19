@@ -18,7 +18,7 @@
  */
 
 /*!
- * \file src/runtime/crt/module.h
+ * \file src/runtime/crt/common/module.h
  * \brief Runtime container of the functions
  */
 #ifndef TVM_RUNTIME_CRT_MODULE_H_
