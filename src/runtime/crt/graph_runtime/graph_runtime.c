@@ -22,14 +22,36 @@
  * \brief implement graph runtime in pure C
  */
 
-#include <tvm/runtime/crt/graph_runtime.h>
+#include <tvm/runtime/crt/graph_runtime/graph_runtime.h>
 
+#include <inttypes.h>
+#include <tvm/runtime/c_runtime_api.h>
 #include <tvm/runtime/crt/common/logging.h>
 #include <tvm/runtime/crt/common/memory.h>
+#include <tvm/runtime/crt/common/platform.h>
 
 #ifndef MAX
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif  // MAX
+
+static uint32_t ReadUint32(JSONReader* reader) {
+  unsigned long x;
+  reader->ReadUnsignedInteger(reader, &x);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtype-limits"
+  if (((uint64_t) x) >= (((uint64_t) 1) << 32)) {
+#pragma GCC diagnostic pop
+    TVMPlatformAbort(-1);
+  }
+
+  return (uint32_t) x;
+}
+
+static int64_t ReadInt64(JSONReader* reader) {
+  long x;
+  reader->ReadInteger(reader, &x);
+  return (int64_t) x;
+}
 
 uint32_t Shape_Accumulate(int64_t* shape, uint32_t ndim) {
   int64_t accum = 1;
@@ -50,14 +72,14 @@ int NodeEntry_Load(TVMGraphRuntimeNodeEntry* entry, JSONReader* reader) {
     fprintf(stderr, "invalid json format: failed to parse `node_id`\n");
     status = -1;
   }
-  reader->ReadUnsignedInteger(reader, &(entry->node_id));
+  entry->node_id = ReadUint32(reader);
   if (!(reader->NextArrayItem(reader))) {
     fprintf(stderr, "invalid json format: failed to parse `index`\n");
     status = -1;
   }
-  reader->ReadUnsignedInteger(reader, &(entry->index));
+  entry->index = ReadUint32(reader);
   if (reader->NextArrayItem(reader)) {
-    reader->ReadUnsignedInteger(reader, &(entry->version));
+    entry->version = ReadUint32(reader);
     if (reader->NextArrayItem(reader)) {
       fprintf(stderr, "invalid json format: failed to parse `version`\n");
       status = -1;
@@ -123,15 +145,15 @@ int TVMGraphRuntimeNode_Load(TVMGraphRuntimeNode* node, JSONReader* reader) {
           status = -1;
           break;
         }
-        reader->ReadUnsignedInteger(reader, &(inputs->node_id));
+        inputs->node_id = ReadUint32(reader);
         if (!reader->NextArrayItem(reader)) {
           fprintf(stderr, "invalid json format\n");
           status = -1;
           break;
         }
-        reader->ReadUnsignedInteger(reader, &(inputs->index));
+        inputs->index = ReadUint32(reader);
         if (reader->NextArrayItem(reader)) {
-          reader->ReadUnsignedInteger(reader, &(inputs->version));
+          inputs->version = ReadUint32(reader);
           if (reader->NextArrayItem(reader)) {
             fprintf(stderr, "invalid json format\n");
             status = -1;
@@ -215,8 +237,8 @@ int TVMGraphRuntimeGraphAttr_Load(TVMGraphRuntimeGraphAttr* attr, JSONReader* re
       }
       reader->BeginArray(reader);
       while (reader->NextArrayItem(reader)) {
-        attr->dltype = vrealloc(attr->dltype, TVM_CRT_STRLEN_DLTYPE * (dltype_count + 1));
-        reader->ReadString(reader, attr->dltype + dltype_count * TVM_CRT_STRLEN_DLTYPE);
+        attr->dltype = vrealloc(attr->dltype, TVM_CRT_MAX_STRLEN_DLTYPE * (dltype_count + 1));
+        reader->ReadString(reader, attr->dltype + dltype_count * TVM_CRT_MAX_STRLEN_DLTYPE);
         dltype_count++;
       }
       attr->dltype_count = dltype_count;
@@ -248,7 +270,7 @@ int TVMGraphRuntimeGraphAttr_Load(TVMGraphRuntimeGraphAttr* attr, JSONReader* re
       reader->BeginArray(reader);
       while (reader->NextArrayItem(reader)) {
         attr->storage_id = vrealloc(attr->storage_id, sizeof(uint32_t) * (storage_id_count + 1));
-        reader->ReadUnsignedInteger(reader, &(attr->storage_id[storage_id_count]));
+        attr->storage_id[storage_id_count] = ReadUint32(reader);
         storage_id_count++;
       }
       if (reader->NextArrayItem(reader)) {
@@ -282,12 +304,12 @@ int TVMGraphRuntimeGraphAttr_Load(TVMGraphRuntimeGraphAttr* attr, JSONReader* re
         attr->ndim = vrealloc(attr->ndim, sizeof(attr->ndim[0]) * (shape_count + 1));
         reader->BeginArray(reader);
         int64_t* attr_shape_ptr = attr->shape + shape_count * TVM_CRT_MAX_NDIM;
-        reader->ReadInteger(reader, attr_shape_ptr + 0);
+        *attr_shape_ptr = ReadInt64(reader);
         uint32_t ndim = 1;
         if (reader->NextArrayItem(reader)) {
           for (ndim = 1; ndim < TVM_CRT_MAX_NDIM; ndim++) {
             if (reader->NextArrayItem(reader)) {
-              reader->ReadInteger(reader, attr_shape_ptr + ndim);
+              attr_shape_ptr[ndim] = ReadInt64(reader);
             } else {
               break;
             }
@@ -327,7 +349,7 @@ int TVMGraphRuntimeGraphAttr_Load(TVMGraphRuntimeGraphAttr* attr, JSONReader* re
       while (reader->NextArrayItem(reader)) {
         attr->device_index =
             vrealloc(attr->device_index, sizeof(uint32_t) * (device_index_count + 1));
-        reader->ReadUnsignedInteger(reader, &(attr->device_index[device_index_count]));
+        attr->device_index[device_index_count] = ReadUint32(reader);
         device_index_count++;
       }
       if (reader->NextArrayItem(reader)) {
@@ -354,7 +376,7 @@ int TVMGraphRuntimeGraphAttr_Load(TVMGraphRuntimeGraphAttr* attr, JSONReader* re
         reader->BeginArray(reader);
         while (reader->NextArrayItem(reader)) {
           temp = vrealloc(temp, sizeof(uint32_t) * (temp_count + 1));
-          reader->ReadUnsignedInteger(reader, &(temp[temp_count]));
+          temp[temp_count] = ReadUint32(reader);
           temp_count++;
         }
         if (temp) {
@@ -367,8 +389,7 @@ int TVMGraphRuntimeGraphAttr_Load(TVMGraphRuntimeGraphAttr* attr, JSONReader* re
           status = -1;
           break;
         }
-        uint32_t temp;
-        reader->ReadUnsignedInteger(reader, &temp);
+        ReadUint32(reader);  // intentionally discard
       } else {
         fprintf(stderr, "cannot skip graph attr %s", key);
         status = -1;
@@ -444,7 +465,7 @@ int TVMGraphRuntime_Load(TVMGraphRuntime* runtime, JSONReader* reader) {
         runtime->input_nodes =
             vrealloc(runtime->input_nodes, sizeof(uint32_t) * (runtime->input_nodes_count + 1));
         uint32_t* node = runtime->input_nodes + runtime->input_nodes_count;
-        reader->ReadUnsignedInteger(reader, node);
+        *node = ReadUint32(reader);
         runtime->input_nodes_count++;
       }
       bitmask |= 2;
@@ -455,7 +476,7 @@ int TVMGraphRuntime_Load(TVMGraphRuntime* runtime, JSONReader* reader) {
             vrealloc(runtime->node_row_ptr, sizeof(uint32_t) * (runtime->node_row_ptr_count + 1));
         uint32_t count = runtime->node_row_ptr_count;
         uint32_t* node = runtime->node_row_ptr + count;
-        reader->ReadUnsignedInteger(reader, node);
+        *node = ReadUint32(reader);
         runtime->node_row_ptr_count++;
       }
       bitmask |= 4;
@@ -558,10 +579,10 @@ int TVMGraphRuntime_LoadParams(TVMGraphRuntime* runtime, const char* param_blob,
   bptr += sizeof(reserved);
 
   // read names
-  char* names = vmalloc(TVM_CRT_STRLEN_NAME * runtime->nodes_count);
-  memset(names, 0, TVM_CRT_STRLEN_NAME * runtime->nodes_count);
+  char* names = vmalloc(TVM_CRT_MAX_STRLEN_FUNCTION_NAME * runtime->nodes_count);
+  memset(names, 0, TVM_CRT_MAX_STRLEN_FUNCTION_NAME * runtime->nodes_count);
   uint64_t names_count;
-  int idx;
+  uint64_t idx;
   names_count = ((uint64_t*)bptr)[0];  // NOLINT(*)
   bptr += sizeof(names_count);
   for (idx = 0; idx < names_count; idx++) {
@@ -572,7 +593,7 @@ int TVMGraphRuntime_LoadParams(TVMGraphRuntime* runtime, const char* param_blob,
       fprintf(stderr, "Error: function name longer than expected.\n");
       status = -1;
     }
-    memcpy(names + TVM_CRT_STRLEN_NAME * idx, bptr, name_length);
+    memcpy(names + TVM_CRT_MAX_STRLEN_FUNCTION_NAME * idx, bptr, name_length);
     bptr += name_length;
   }
 
@@ -587,12 +608,12 @@ int TVMGraphRuntime_LoadParams(TVMGraphRuntime* runtime, const char* param_blob,
   }
 
   for (idx = 0; idx < size; idx++) {
-    int32_t in_idx = runtime->GetInputIndex(runtime, names + TVM_CRT_STRLEN_NAME * idx);
+    int32_t in_idx = runtime->GetInputIndex(runtime, names + TVM_CRT_MAX_STRLEN_FUNCTION_NAME * idx);
     CHECK_GT(in_idx, 0, "Found param for non-existent input: %s\n",
-             names + TVM_CRT_STRLEN_NAME * idx);
+             names + TVM_CRT_MAX_STRLEN_FUNCTION_NAME * idx);
     uint32_t eid = runtime->GetEntryId(runtime, runtime->input_nodes[in_idx], 0);
     if (!(eid < runtime->data_entry_count)) {
-      fprintf(stderr, "`entry_id`=%d is greater than expected(%d).\n", eid,
+      fprintf(stderr, "`entry_id`=%" PRIu32 " is greater than expected(%" PRIu32 ").\n", eid,
               runtime->data_entry_count);
       status = -1;
     }
@@ -609,7 +630,7 @@ int TVMGraphRuntime_LoadParams(TVMGraphRuntime* runtime, const char* param_blob,
 #if TVM_CRT_DEBUG
     TVMNDArray* entry = &(runtime->data_entry[eid]);
     printf("loading: param %s loaded, in_idx=%d, eid=%d, ndim=%d, data[0]=%f\n",
-           names + TVM_CRT_STRLEN_NAME * idx, in_idx, eid, entry->dl_tensor.ndim,
+           names + TVM_CRT_MAX_STRLEN_FUNCTION_NAME * idx, in_idx, eid, entry->dl_tensor.ndim,
            ((float*)entry->dl_tensor.data)[0]);  // NOLINT(*)
 #endif                                           // TVM_CRT_DEBUG
   }
@@ -661,7 +682,7 @@ void TVMGraphRuntime_SetupStorage(TVMGraphRuntime* runtime) {
   TVMGraphRuntimeGraphAttr* attrs = &(runtime->attrs);
   DLDataType* vtype = vmalloc(sizeof(DLDataType) * attrs->dltype_count);
   for (idx = 0; idx < attrs->dltype_count; idx++) {
-    vtype[idx] = String2DLDataType(attrs->dltype + idx * TVM_CRT_STRLEN_DLTYPE);
+    vtype[idx] = String2DLDataType(attrs->dltype + idx * TVM_CRT_MAX_STRLEN_DLTYPE);
   }
 
   // Size and device type of each storage pool entry.
@@ -700,7 +721,7 @@ void TVMGraphRuntime_SetupStorage(TVMGraphRuntime* runtime) {
     shape[0] = (pit.size + 3) / 4;
     runtime->storage_pool[runtime->storage_pool_count] = TVMNDArray_Empty(1, shape, dtype, ctx);
     CHECK_NE(runtime->storage_pool[runtime->storage_pool_count].dl_tensor.data, 0,
-             "fail to create storage_pool with idx=%d\n", idx);
+             "fail to create storage_pool with idx=%" PRIu32 "\n", idx);
     runtime->storage_pool_count++;
   }
 
@@ -716,7 +737,8 @@ void TVMGraphRuntime_SetupStorage(TVMGraphRuntime* runtime) {
         TVMNDArray_CreateView(&(runtime->storage_pool[storage_id]),
                               attrs->shape + idx * TVM_CRT_MAX_NDIM, attrs->ndim[idx], vtype[idx]);
     CHECK_NE(runtime->data_entry[idx].dl_tensor.data, 0,
-             "fail to create for node with idx=%d, storage_id=%u\n", idx, storage_id);
+             "fail to create for node with idx=%" PRIu32 ", storage_id=%" PRIu32 "\n",
+             idx, storage_id);
   }
 
   // Release memory
@@ -751,13 +773,14 @@ int TVMGraphRuntime_SetupOpExecs(TVMGraphRuntime* runtime) {
         break;
       }
       if (args_count >= TVM_CRT_MAX_ARGS) {
-        fprintf(stderr, "too many arguments: expected less than %d args, but got %d.\n",
+        fprintf(stderr,
+                "too many arguments: expected less than %d args, but got %" PRIu32 ".\n",
                 TVM_CRT_MAX_ARGS, args_count);
         status = -1;
         break;
       }
 #if TVM_CRT_DEBUG
-      printf("tvm_op: creating %s with node_id=%d\n", inode->param.func_name, nid);
+      printf("tvm_op: creating %s with node_id=%" PRIu32 "\n", inode->param.func_name, nid);
 #endif  // TVM_CRT_DEBUG
       TVMPackedFunc pf;
       runtime->CreateTVMOp(runtime, &(inode->param), args, args_count, inode->inputs_count, &pf);
@@ -857,7 +880,7 @@ TVMGraphRuntime* TVMGraphRuntimeCreate(const char* sym_json, const TVMModule* m,
 }
 
 void TVMGraphRuntimeRelease(TVMGraphRuntime** pptr) {
-  int32_t idx;
+  uint32_t idx;
   TVMGraphRuntime* runtime = *pptr;
   for (idx = 0; idx < runtime->nodes_count; ++idx) {
     TVMGraphRuntimeNodeRelease(&(runtime->nodes[idx]));
