@@ -21,7 +21,7 @@
 #include <stdlib.h>
 
 #include "bundle.h"
-#include "runtime.c"
+#include <tvm/runtime/crt/graph_runtime/graph_runtime.h>
 
 TVM_DLL void* tvm_runtime_create(const char* json_data, const char* params_data,
                                  const uint64_t params_size) {

@@ -25,6 +25,7 @@
 #define TVM_RUNTIME_CRT_GRAPH_RUNTIME_LOAD_JSON_H_
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdio.h>
 
 enum {

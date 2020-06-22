@@ -22,11 +22,10 @@
  * \brief implement graph runtime in pure C
  */
 
-#include "graph_runtime.h"
+#include <tvm/runtime/crt/graph_runtime.h>
 
-#include <tvm/runtime/crt/memory.h>
-
-#include "logging.h"
+#include <tvm/runtime/crt/common/logging.h>
+#include <tvm/runtime/crt/common/memory.h>
 
 #ifndef MAX
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))

@@ -21,9 +21,11 @@
  * \file load_json.c
  * \brief Load graph from JSON file.
  */
-#include "load_json.h"
+#include <tvm/runtime/crt/graph_runtime/load_json.h>
+#include <string.h>
+#include <stdlib.h>
 
-#include <tvm/runtime/crt/memory.h>
+#include <tvm/runtime/crt/common/memory.h>
 
 // the node entry structure in serialized format
 typedef struct JSONNodeEntry {

@@ -26,10 +26,10 @@
 
 #include <dlpack/dlpack.h>
 
-#include "load_json.h"
-#include "../common/module.h"
-#include "../common/ndarray.h"
-#include "../common/packed_func.h"
+#include <tvm/runtime/crt/graph_runtime/load_json.h>
+#include <tvm/runtime/crt/common/module.h>
+#include <tvm/runtime/crt/common/ndarray.h>
+#include <tvm/runtime/crt/common/packed_func.h>
 
 /*! \brief operator attributes about tvm op */
 typedef struct TVMOpParam {
