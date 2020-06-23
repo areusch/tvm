@@ -212,4 +212,6 @@ int TVMGraphRuntime_LoadParams(TVMGraphRuntime* runtime, const char* param_blob,
 void TVMGraphRuntime_Run(TVMGraphRuntime* runtime);
 int TVMGraphRuntime_GetOutput(TVMGraphRuntime* runtime, const int32_t idx, DLTensor* out);
 
+void TVMGraphRuntimeRegisterGlobals(void);
+
 #endif  // TVM_RUNTIME_CRT_GRAPH_RUNTIME_H_

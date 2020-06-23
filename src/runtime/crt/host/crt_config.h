@@ -18,47 +18,43 @@
  */
 
 /*!
- * \file tvm/runtime/host/crt_config.h
- * \brief CRT configuration for the host-linked CRT.
+ * \file tvm/runtime/crt_config.h.template
+ * \brief Template for CRT configuration, to be modified on each target.
  */
 #ifndef TVM_RUNTIME_CRT_CONFIG_H_
 #define TVM_RUNTIME_CRT_CONFIG_H_
 
-
-/*! Support low-level debugging in MISRA-C runtime */
-#define TVM_CRT_DEBUG 0
+/*! Log level of the CRT runtime */
+#define TVM_CRT_LOG_LEVEL TVM_CRT_LOG_LEVEL_DEBUG
 
 /*! Maximum supported dimension in NDArray */
 #define TVM_CRT_MAX_NDIM 6
+
 /*! Maximum supported arguments in generated functions */
 #define TVM_CRT_MAX_ARGS 10
+
+/*! Size of the global function registry, in bytes. */
+#define TVM_CRT_GLOBAL_FUNC_REGISTRY_SIZE_BYTES 200
+
+/*! Maximum number of registered modules. */
+#define TVM_CRT_MAX_REGISTERED_MODULES 2
+
+/*! Maximum packet size, in bytes, including the length header. */
+#define TVM_CRT_MAX_PACKET_SIZE_BYTES 2048
+
 /*! Maximum supported string length in dltype, e.g. "int8", "int16", "float32" */
-#define TVM_CRT_STRLEN_DLTYPE 10
+#define TVM_CRT_MAX_STRLEN_DLTYPE 10
+
 /*! Maximum supported string length in function names */
-#define TVM_CRT_STRLEN_NAME 80
+#define TVM_CRT_MAX_STRLEN_FUNCTION_NAME 80
 
-/*!
- * \brief Log memory pool size for virtual memory allocation
- *
- * Here is a list of possible choices:
- * * use 16 for 64 KiB memory space
- * * use 17 for 128 KiB memory space
- * * use 18 for 256 KiB memory space
- * * use 19 for 512 KiB memory space
- * * use 20 for 1 MiB memory space
- * * use 21 for 2 MiB memory space
- * * use 22 for 4 MiB memory space
- * * use 23 for 8 MiB memory space
- * * use 24 for 16 MiB memory space
- * * use 25 for 32 MiB memory space
- * * use 26 for 64 MiB memory space
- * * use 27 for 128 MiB memory space
- * * use 28 for 256 MiB memory space
- */
-#define TVM_CRT_LOG_VIRT_MEM_SIZE 24
+/*! \brief Maximum length of a PackedFunc function name. */
+#define TVM_CRT_MAX_FUNCTION_NAME_LENGTH_BYTES  30
 
-/*! \brief Page size for virtual memory allocation */
-#define TVM_CRT_PAGE_BYTES 4096
+/*! \brief Log2 of the page size (bytes) for a virtual memory page. */
+#define TVM_CRT_PAGE_BITS  10  // 1 kB
 
+/*! \brief Number of pages on device. */
+#define TVM_CRT_MAX_PAGES 300
 
 #endif  // TVM_RUNTIME_CRT_CONFIG_H_

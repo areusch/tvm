@@ -18,30 +18,32 @@
  */
 
 /*!
- * \file src/runtime/crt/common/module.h
+ * \file src/runtime/crt/module.h
  * \brief Runtime container of the functions
  */
 #ifndef TVM_RUNTIME_CRT_MODULE_H_
 #define TVM_RUNTIME_CRT_MODULE_H_
 
-#include <string.h>
-#include <tvm/runtime/c_runtime_api.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-struct TVMPackedFunc;
+#include <tvm/runtime/c_backend_api.h>
+#include <tvm/runtime/crt/common/func_registry.h>
 
 /*!
  * \brief Module container of TVM.
  */
 typedef struct TVMModule {
-  /*!
-   * \brief Get packed function from current module by name.
-   *
-   * \param name The name of the function.
-   * \param pf The result function.
-   *
-   *  This function will return PackedFunc(nullptr) if function do not exist.
-   */
-  void (*GetFunction)(struct TVMModule* mod, const char* name, struct TVMPackedFunc* pf);
+  /*! \brief The function registry associated with this mdoule. */
+  const TVMFuncRegistry* registry;
 } TVMModule;
+
+/*! \brief Entry point for the system lib module. */
+const TVMModule* TVMSystemLibEntryPoint(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  // TVM_RUNTIME_CRT_MODULE_H_

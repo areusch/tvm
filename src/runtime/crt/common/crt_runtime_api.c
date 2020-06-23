@@ -17,12 +17,14 @@
  * under the License.
  */
 
+#include <tvm/runtime/c_runtime_api.h>
 #include <assert.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <tvm/runtime/c_runtime_api.h>
+#include <tvm/runtime/crt/common/func_registry.h>
 #include <tvm/runtime/crt/common/memory.h>
 #include <tvm/runtime/crt/common/module.h>
 #include <tvm/runtime/crt/common/ndarray.h>

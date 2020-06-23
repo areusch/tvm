@@ -31,6 +31,8 @@ extern "C" {
 #include <tvm/runtime/c_backend_api.h>
 #include <tvm/runtime/crt/error_codes.h>
 
+typedef uint16_t tvm_module_index_t;
+
 typedef uint16_t tvm_function_index_t;
 
 /*!
