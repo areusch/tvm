@@ -24,7 +24,7 @@
 
 #include "framing.h"
 
-#include <type_traits>
+//#include <type_traits>
 #include <string.h>
 #include <tvm/runtime/crt/logging.h>
 #include "crt_config.h"
@@ -41,9 +41,14 @@
 namespace tvm {
 namespace runtime {
 
+//template <typename E>
+//static constexpr typename std::underlying_type<E>::type to_integral(E e) {
+//  return static_cast<typename std::underlying_type<E>::type>(e);
+//}
+
 template <typename E>
-static constexpr typename std::underlying_type<E>::type to_integral(E e) {
-  return static_cast<typename std::underlying_type<E>::type>(e);
+static constexpr uint8_t to_integral(E e) {
+  return static_cast<uint8_t>(e);
 }
 
 int Unframer::Write(const uint8_t* data, size_t data_size_bytes, size_t* bytes_consumed) {

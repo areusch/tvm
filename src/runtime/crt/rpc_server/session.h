@@ -148,6 +148,7 @@ class Session {
     void PacketDone(bool is_valid) override;
 
    private:
+    void operator delete(void*) noexcept {}
     Session* session_;
   };
 

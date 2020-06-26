@@ -23,12 +23,13 @@
  */
 
 #include <inttypes.h>
-#include <cstdio>
+#include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
 
-#include "dmlc/base.h"
+//#include "dmlc/base.h"
 #define DMLC_CMAKE_LITTLE_ENDIAN DMLC_IO_USE_LITTLE_ENDIAN
+#define DMLC_LITTLE_ENDIAN true
 #include <tvm/runtime/c_runtime_api.h>
 #include <tvm/runtime/crt/logging.h>
 #include <tvm/runtime/crt/memory.h>
@@ -95,6 +96,7 @@ class SerialWriteStream : public WriteStream {
   void PacketDone(bool is_valid) override {}
 
  private:
+  void operator delete(void*) noexcept {}
   utvm_rpc_channel_write_t write_func_;
   void* write_func_ctx_;
 };
@@ -109,6 +111,8 @@ class MicroRPCServer {
       io_{&session_, &receive_buffer_},
       unframer_{session_.Receiver()},
       rpc_server_{&io_}, has_pending_byte_{false}, is_running_{true} {}
+
+  void* operator new(size_t count, void* ptr) { return ptr; };
 
   /*! \brief Process one message from the receive buffer, if possible.
    *
@@ -169,6 +173,7 @@ class MicroRPCServer {
 }  // namespace runtime
 }  // namespace tvm
 
+void* operator new[](size_t count, void* ptr) { return ptr; }
 
 extern "C" {
 

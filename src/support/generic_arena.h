@@ -32,12 +32,20 @@
 #define TVM_ARENA_HAS_DESTRUCTOR 1
 #endif
 
-#include <cstddef>
-#include <type_traits>
-#include <utility>
+#include <stddef.h>
+//#include <type_traits>
+//#include <utility.h>
 
 namespace tvm {
 namespace support {
+
+namespace {
+template<typename T>                // For lvalues (T is T&),
+T&& forward(T&& param)         // take/return lvalue refs.
+{                                   // For rvalues (T is T),
+    return static_cast<T&&>(param); // take/return rvalue refs.
+}
+}
 
 /*!
  * \brief An arena page header.
@@ -111,7 +119,7 @@ class GenericArena {
   template <typename T, typename... Args>
   T* make(Args&&... args) {
     T* ptr = allocate_<T>();
-    new (ptr) T(std::forward<Args>(args)...);
+    new (ptr) T(forward<Args>(args)...);
     return ptr;
   }
 

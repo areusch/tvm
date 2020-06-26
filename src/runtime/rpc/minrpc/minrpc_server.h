@@ -28,9 +28,8 @@
 #ifndef TVM_RUNTIME_RPC_MINRPC_MINRPC_SERVER_H_
 #define TVM_RUNTIME_RPC_MINRPC_MINRPC_SERVER_H_
 
-#include <dmlc/endian.h>
 #include <tvm/runtime/c_runtime_api.h>
-#include <cstring>
+#include <string.h>
 
 #include "../../../support/generic_arena.h"
 #include "rpc_protocol.h"
@@ -439,31 +438,31 @@ class MinRPCServer {
 
   template <typename T>
   T* ArenaAlloc(int count) {
-    static_assert(std::is_pod<T>::value, "need to be trival");
+//    static_assert(std::is_pod<T>::value, "need to be trival");
     return arena_.template allocate_<T>(count);
   }
 
   template <typename T>
   void Read(T* data) {
-    static_assert(std::is_pod<T>::value, "need to be trival");
+//    static_assert(std::is_pod<T>::value, "need to be trival");
     this->ReadRawBytes(data, sizeof(T));
   }
 
   template <typename T>
   void ReadArray(T* data, size_t count) {
-    static_assert(std::is_pod<T>::value, "need to be trival");
+//    static_assert(std::is_pod<T>::value, "need to be trival");
     return this->ReadRawBytes(data, sizeof(T) * count);
   }
 
   template <typename T>
   void Write(const T& data) {
-    static_assert(std::is_pod<T>::value, "need to be trival");
+//    static_assert(std::is_pod<T>::value, "need to be trival");
     return this->WriteRawBytes(&data, sizeof(T));
   }
 
   template <typename T>
   void WriteArray(T* data, size_t count) {
-    static_assert(std::is_pod<T>::value, "need to be trival");
+//    static_assert(std::is_pod<T>::value, "need to be trival");
     return this->WriteRawBytes(data, sizeof(T) * count);
   }
 

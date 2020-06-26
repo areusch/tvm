@@ -26,6 +26,7 @@
 #define TVM_RUNTIME_MICRO_MICRO_RPC_SERVER_H_
 
 #include <stdlib.h>
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,7 +39,7 @@ extern "C" {
  * \param num_bytes Number of bytes avaiable in data.
  * \return The number of bytes written.
  */
-typedef ssize_t (*utvm_rpc_channel_write_t)(void* context, const uint8_t* data, size_t num_bytes);
+typedef ssize_t(*utvm_rpc_channel_write_t)(void* context, const uint8_t* data, size_t num_bytes);
 
 /*! \brief Opaque pointer type to TVM RPC Server. */
 typedef void* utvm_rpc_server_t;

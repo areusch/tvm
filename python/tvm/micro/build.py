@@ -157,4 +157,4 @@ def build_static_runtime(workspace, compiler, module, lib_opts=None, bin_opts=No
 
   runtime_build_dir = workspace.relpath(f'build/runtime')
   os.makedirs(runtime_build_dir)
-  return compiler.Binary(runtime_build_dir, libs, bin_opts)
+  return compiler.Binary(runtime_build_dir, reversed(libs), bin_opts)
