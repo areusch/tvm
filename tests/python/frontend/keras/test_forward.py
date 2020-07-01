@@ -192,6 +192,12 @@ class TestKeras:
         keras_model = keras.models.Model(data, x)
         verify_keras_frontend(keras_model)
 
+    def test_rnn_dense(self, keras):
+        data = keras.layers.Input(shape=(None, 20))
+        x = keras.layers.Dense(10, activation='relu', kernel_initializer='uniform')(data)
+        keras_model = keras.models.Model(data, x)
+        verify_keras_frontend(keras_model, layout='NHWC')
+
     def test_forward_permute(self, keras):
         data = keras.layers.Input(shape=(2, 3, 4))
         x = keras.layers.Permute([2, 3, 1])(data)
@@ -543,6 +549,7 @@ class TestKeras:
 if __name__ == '__main__':
     for k in [keras, tf_keras]:
         sut = TestKeras()
+        sut.test_rnn_dense(keras=k)
         sut.test_forward_merge_dot(keras=k)
         sut.test_forward_merge(keras=k)
         sut.test_forward_activations(keras=k)
