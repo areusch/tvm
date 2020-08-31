@@ -23,7 +23,9 @@ import signal
 import subprocess
 import threading
 
+from . import class_factory
 from . import transport as _transport
+from tvm._ffi.registry import register_func
 
 
 class Debugger(metaclass=abc.ABCMeta):
@@ -183,6 +185,58 @@ class GdbRemoteDebugger(GdbDebugger):
     def stop(self):
         try:
             super(GdbRemoteDebugger, self).Stop()
+        finally:
+            if self.wrapping_context_manager is not None:
+                self.wrapping_context_manager.__exit__(None, None, None)
+
+
+GLOBAL_DEBUGGER = None
+
+
+class DebuggerFactory(class_factory.ClassFactory):
+
+    SUPERCLASS = Debugger
+
+
+def launch_debugger(debugger_class_factory):
+    global GLOBAL_DEBUGGER
+    GLOBAL_DEBUGGER = debugger_class_factory.instantiate()
+    GLOBAL_DEBUGGER.start()
+
+
+@register_func("tvm.micro.debugger.launch_debugger")
+def _launch_debugger(debugger_factory_json):
+    launch_debugger(DebuggerFactory.from_json(debugger_factory_json))
+
+
+@register_func("tvm.micro.debugger.stop_debugger")
+def stop_debugger():
+    global GLOBAL_DEBUGGER
+    if GLOBAL_DEBUGGER is not None:
+        try:
+            GLOBAL_DEBUGGER.stop()
+        finally:
+            GLOBAL_DEBUGGER = None
+
+
+class RpcDebugger(Debugger):
+
+    def __init__(self, rpc_session, factory, wrapping_context_manager=None):
+        super(RpcDebugger, self).__init__()
+        self._factory = factory
+        self.launch_debugger = rpc_session.get_function('tvm.micro.debugger.launch_debugger')
+        self.stop_debugger = rpc_session.get_function('tvm.micro.debugger.stop_debugger')
+        self.wrapping_context_manager = wrapping_context_manager
+
+    def start(self):
+        if self.wrapping_context_manager is not None:
+            self.wrapping_context_manager.__enter__()
+        self.launch_debugger(self._factory.to_json)
+        input('Press [Enter] when debugger is set')
+
+    def stop(self):
+        try:
+            self.stop_debugger()
         finally:
             if self.wrapping_context_manager is not None:
                 self.wrapping_context_manager.__exit__(None, None, None)

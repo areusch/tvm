@@ -22,8 +22,9 @@ import argparse
 import ast
 import json
 import multiprocessing
-import sys
 import logging
+import signal
+import sys
 import tvm
 from tvm import micro
 from .. import rpc
@@ -57,6 +58,10 @@ def main(args):
                         load_library=args.load_library,
                         custom_addr=args.custom_addr,
                         silent=args.silent)
+
+    # Ignore Ctrl+C. rpc.Server is implemented using multiprocessing, so delegate handling to the
+    # subprocesses.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     server.proc.join()
 
 

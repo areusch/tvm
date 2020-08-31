@@ -200,12 +200,17 @@ def _listen_loop(sock, port, rpc_key, tracker_addr, load_library, custom_addr):
         logger.info("connection from %s", addr)
         server_proc = multiprocessing.Process(target=_serve_loop,
                                               args=(conn, addr, load_library, work_path))
-        server_proc.deamon = True
+        server_proc.daemon = True
         server_proc.start()
         # close from our side.
         conn.close()
         # wait until server process finish or timeout
-        server_proc.join(opts.get("timeout", None))
+        old_signal_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        try:
+            server_proc.join(opts.get("timeout", None))
+        finally:
+            signal.signal(signal.SIGINT, old_signal_handler)
+
         if server_proc.is_alive():
             logger.info("Timeout in RPC session, kill..")
             # pylint: disable=import-outside-toplevel
