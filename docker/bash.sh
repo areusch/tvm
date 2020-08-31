@@ -27,10 +27,26 @@
 #     Execute command in the docker image, default non-interactive
 #     With -i, execute interactively.
 #
+
+set -e
+
+source "$(dirname $0)/dev_common.sh" || exit 2
+
 interactive=0
 if [ "$1" == "-i" ]; then
     interactive=1
     shift
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE="$(pwd)"
+
+if [ "$1" == "--repo-mount-point" ]; then
+    shift
+    REPO_MOUNT_POINT="$1"
+    shift
+else
+    REPO_MOUNT_POINT="${WORKSPACE}"
 fi
 
 if [ "$#" -lt 1 ]; then
@@ -38,7 +54,15 @@ if [ "$#" -lt 1 ]; then
     exit -1
 fi
 
-DOCKER_IMAGE_NAME=("$1")
+DOCKER_IMAGE_NAME=$(lookup_image_name "$1" || echo)
+if [ -z "${DOCKER_IMAGE_NAME}" ]; then
+    if echo "$1" | grep -qv '/'; then
+        echo "error: can't find shorthand image $1 in Jenkinsfile"
+        exit 2
+    else
+        DOCKER_IMAGE_NAME="$1"
+    fi
+fi
 
 CI_DOCKER_EXTRA_PARAMS=( )
 if [ "$#" -eq 1 ]; then
@@ -55,13 +79,6 @@ else
     shift 1
     COMMAND=("$@")
 fi
-
-if [ $interactive -eq 1 ]; then
-    CI_DOCKER_EXTRA_PARAMS=( "${CI_DOCKER_EXTRA_PARAMS[@]}" -it )
-fi
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE="$(pwd)"
 
 # Use nvidia-docker if the container is GPU.
 if [[ ! -z $CUDA_VISIBLE_DEVICES ]]; then
