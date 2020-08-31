@@ -159,67 +159,6 @@ class TransportLogger(Transport):
         return bytes_written
 
 
-class SubprocessTransport(Transport):
-    """A Transport implementation that uses a subprocess's stdin/stdout as the channel."""
-
-    def __init__(self, args, **kwargs):
-        self.args = args
-        self.kwargs = kwargs
-        self.popen = None
-
-    def open(self):
-        self.kwargs['stdout'] = subprocess.PIPE
-        self.kwargs['stdin'] = subprocess.PIPE
-        self.kwargs['bufsize'] = 0
-        self.popen = subprocess.Popen(self.args, **self.kwargs)
-        self.stdin = self.popen.stdin
-        self.stdout = self.popen.stdout
-
-    def write(self, data):
-        to_return = self.stdin.write(data)
-        self.stdin.flush()
-
-        return to_return
-
-    def read(self, n):
-        return self.stdout.read(n)
-
-    def close(self):
-        self.stdin.close()
-        self.stdout.close()
-        self.popen.terminate()
-
-
-class DebugWrapperTransport(Transport):
-    """A Transport wrapper class that launches a debugger before opening the transport.
-
-    This is primiarly useful when debugging the other end of a SubprocessTransport. It allows you
-    to pipe data through the GDB process to drive the subprocess with a debugger attached.
-    """
-
-    def __init__(self, debugger, transport):
-        self.debugger = debugger
-        self.transport = transport
-        self.debugger.on_terminate_callbacks.append(self.transport.close)
-
-    def open(self):
-        self.debugger.Start()
-
-        try:
-            self.transport.open()
-        except Exception:
-            self.debugger.Stop()
-            raise
-
-    def write(self, data):
-        return self.transport.write(data)
-
-    def read(self, n):
-        return self.transport.read(n)
-
-    def close(self):
-        self.transport.close()
-        self.debugger.Stop()
 
 
 TransportContextManager = typing.ContextManager[Transport]
