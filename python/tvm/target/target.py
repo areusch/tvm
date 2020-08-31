@@ -187,6 +187,7 @@ def micro(hardware='unknown', options=None):
     """
     trans_table = {
         "host": ["-mcpu=native"],
+        "stm32f746xx": ["-mcpu=cortex-m7"], #, "-mfpu=fpv5-sp-d16"],
     }
     opts = _merge_opts(trans_table[hardware] + ["-runtime=c", "--system-lib"], options)
 
