@@ -24,8 +24,9 @@ RUN apt-get update --fix-missing
 COPY install/ubuntu_install_core.sh /install/ubuntu_install_core.sh
 RUN bash /install/ubuntu_install_core.sh
 
-COPY install/ubuntu1804_install_python.sh /install/ubuntu1804_install_python.sh
-RUN bash /install/ubuntu1804_install_python.sh
+COPY install/ubuntu1804_install_python_venv.sh /install/ubuntu1804_install_python_venv.sh
+RUN bash /install/ubuntu1804_install_python_venv.sh
+ENV PATH=/opt/tvm-venv/bin:$PATH
 
 COPY install/ubuntu_install_python_package.sh /install/ubuntu_install_python_package.sh
 RUN bash /install/ubuntu_install_python_package.sh
@@ -62,3 +63,8 @@ RUN bash /install/ubuntu_install_qemu.sh
 # Zephyr SDK deps
 COPY install/ubuntu_install_zephyr.sh /install/ubuntu_install_zephyr.sh
 RUN bash /install/ubuntu_install_zephyr.sh
+ENV ZEPHYR_BASE=/opt/zephyrproject/zephyr
+
+# Install microTVM deps
+COPY install/ubuntu_install_microtvm.sh /install/ubuntu_install_microtvm.sh
+RUN bash /install/ubuntu_install_microtvm.sh

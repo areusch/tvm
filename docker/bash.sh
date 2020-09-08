@@ -28,7 +28,7 @@
 #     With -i, execute interactively.
 #
 
-set -e
+set -ex
 
 source "$(dirname $0)/dev_common.sh" || exit 2
 
@@ -56,7 +56,7 @@ fi
 
 DOCKER_IMAGE_NAME=$(lookup_image_name "$1" || echo)
 if [ -z "${DOCKER_IMAGE_NAME}" ]; then
-    if echo "$1" | grep -qv '/'; then
+    if echo "$1" | grep -qvE ':|/'; then
         echo "error: can't find shorthand image $1 in Jenkinsfile"
         exit 2
     else
@@ -71,13 +71,17 @@ if [ "$#" -eq 1 ]; then
     if [[ $(uname) == "Darwin" ]]; then
         # Docker's host networking driver isn't supported on macOS.
         # Use default bridge network and expose port for jupyter notebook.
-        CI_DOCKER_EXTRA_PARAMS=( "${CI_DOCKER_EXTRA_PARAMS[@]}" "-p 8888:8888" )
+        CI_DOCKER_EXTRA_PARAMS=( "${CI_DOCKER_EXTRA_PARAMS[@]}" "-p" "8888:8888" )
     else
         CI_DOCKER_EXTRA_PARAMS=( "${CI_DOCKER_EXTRA_PARAMS[@]}" "--net=host" )
     fi
 else
     shift 1
     COMMAND=("$@")
+fi
+
+if [ $interactive -eq 1 ]; then
+    CI_DOCKER_EXTRA_PARAMS=( "${CI_DOCKER_EXTRA_PARAMS[@]}" -it )
 fi
 
 # Use nvidia-docker if the container is GPU.
@@ -124,7 +128,7 @@ fi
 # By default we cleanup - remove the container once it finish running (--rm)
 # and share the PID namespace (--pid=host) so the process inside does not have
 # pid 1 and SIGKILL is propagated to the process inside (jenkins can kill it).
-${DOCKER_BINARY} run --rm --pid=host\
+${DOCKER_BINARY} run --pid=host\
     -v ${WORKSPACE}:/workspace \
     -v ${SCRIPT_DIR}:/docker \
     "${EXTRA_MOUNTS[@]}" \
@@ -140,4 +144,4 @@ ${DOCKER_BINARY} run --rm --pid=host\
     "${CI_DOCKER_EXTRA_PARAMS[@]}" \
     ${DOCKER_IMAGE_NAME} \
     bash --login /docker/with_the_same_user \
-    ${COMMAND[@]}
+    "${COMMAND[@]}"

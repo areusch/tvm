@@ -35,8 +35,8 @@ def _make_session(mod):
   compiler = zephyr.ZephyrCompiler(
     project_dir=project_dir,
     board='nucleo_f746zg',
-    zephyr_toolchain_variant='gnuarmemb',
-    env_vars={'GNUARMEMB_TOOLCHAIN_PATH': '/usr/local'},
+    zephyr_toolchain_variant='zephyr',
+#    env_vars={'GNUARMEMB_TOOLCHAIN_PATH': '/usr/local'},
   )
 
   opts = tvm.micro.default_options(f'{project_dir}/crt')

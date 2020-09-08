@@ -106,27 +106,31 @@ sudo apt-get update
 
 sudo apt-get install -y cmake
 
-mkdir /opt/west
-python3.6 -mvenv /opt/west  # NOTE: include .6 to make a python3.6 link for west/cmake.
-/opt/west/bin/pip3 install west
+#mkdir /opt/west
+#python3.6 -mvenv /opt/west  # NOTE: include .6 to make a python3.6 link for west/cmake.
+#/opt/west/bin/pip3 install west
+pip3 install west
 
-mkdir -p ~/.local/bin
-echo 'export PATH=~/.local/bin:"$PATH"' >> ~/.bashrc
-PATH=$HOME/.local/bin:"$PATH"
-ln -s /opt/west/bin/west ~/.local/bin/
+#cat <<EOF | tee /usr/local/bin/west >/dev/null
+##!/bin/bash -e
+#
+#source /opt/west/bin/activate
+#export ZEPHYR_BASE=/opt/zephyrproject/zephyr
+#west "\$@"
+#EOF
+#chmod a+x /usr/local/bin/west
 
-west init ~/zephyrproject
-cd ~/zephyrproject
+west init /opt/zephyrproject
+cd /opt/zephyrproject
 west update
 
 west zephyr-export
 
-/opt/west/bin/pip3 install -r ~/zephyrproject/zephyr/scripts/requirements.txt
+#/opt/west/bin/pip3 install -r /opt/zephyrproject/zephyr/scripts/requirements.txt
+pip3 install -r /opt/zephyrproject/zephyr/scripts/requirements.txt
 
 SDK_VERSION=0.11.3
 wget --no-verbose \
      https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${SDK_VERSION}/zephyr-sdk-${SDK_VERSION}-setup.run
 chmod +x zephyr-sdk-${SDK_VERSION}-setup.run
-./zephyr-sdk-${SDK_VERSION}-setup.run -- -d ~/zephyr-sdk
-
-echo 'export ZEPHYR_BASE=$HOME/zephyrproject/zephyr' >> ~/.bashrc
+./zephyr-sdk-${SDK_VERSION}-setup.run -- -d /opt/zephyr-sdk
