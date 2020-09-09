@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 
+import yaml
+
 import tvm.micro
 from . import base
 from .. import compiler
@@ -142,6 +144,7 @@ class ZephyrCompiler(tvm.micro.Compiler):
         # expected not to exist after populate_tvm_objs
         build_dir = os.path.join(self._project_dir, '__tvm_build')
         os.mkdir(build_dir)
+#        build_dir = output
         cmake_args = ['cmake', '..', f'-DBOARD={self._board}'] + self._options_to_cmake_args(options)
         if 'include_dirs' in options:
             cmake_args.append(
@@ -156,7 +159,9 @@ class ZephyrCompiler(tvm.micro.Compiler):
         to_copy = [
             os.path.join('zephyr', 'zephyr.elf'),
             os.path.join('zephyr', 'zephyr.bin'),
+            os.path.join('zephyr', 'zephyr.hex'),
             os.path.join('zephyr', 'zephyr.dts'),
+            os.path.join('zephyr', 'runners.yaml'),
             'CMakeCache.txt',
         ]
         for f in to_copy:
@@ -170,6 +175,8 @@ class ZephyrCompiler(tvm.micro.Compiler):
                                      binary_file=os.path.join('zephyr', 'zephyr.bin'),
                                      debug_files=[os.path.join('zephyr', 'zephyr.elf')],
                                      labelled_files={'cmake_cache': ['CMakeCache.txt'],
+                                                     'hex_file': [os.path.join('zephyr', 'zephyr.hex')],
+                                                     'runners_yaml': [os.path.join('zephyr', 'runners.yaml')],
                                                      'device_tree': [os.path.join('zephyr', 'zephyr.dts')]})
 
     @property
@@ -193,7 +200,7 @@ CMAKE_BOOL_MAP = dict(
 
 def read_cmake_cache(file_name):
     entries = collections.OrderedDict()
-    with open(file_name) as f:
+    with open(file_name, encoding='utf-8') as f:
         for line in f:
             m = CACHE_ENTRY_RE.match(line.rstrip('\n'))
             if not m:
@@ -274,7 +281,10 @@ class ZephyrFlasher(tvm.micro.compiler.Flasher):
             import usb
             find_kw = self.BOARD_USB_FIND_KW[cmake_entries['BOARD']]
             boards = usb.core.find(find_all=True, **find_kw)
-            serials = [b.serial_number for b in boards]
+            serials = []
+            for b in boards:
+              serials.append(b.serial_number)
+
             if len(serials) == 0:
                 raise BoardAutodetectFailed(f'No attached USB devices matching: {find_kw!r}')
             serials.sort()
@@ -288,8 +298,19 @@ class ZephyrFlasher(tvm.micro.compiler.Flasher):
     def _get_openocd_device_args(self, cmake_entries):
         return ['--serial', self.openocd_serial(cmake_entries)]
 
+    @classmethod
+    def _get_flash_runner(cls, cmake_entries):
+        flash_runner = cmake_entries.get('ZEPHYR_BOARD_FLASH_RUNNER')
+        if flash_runner is not None:
+            return flash_runner
+
+        with open(cmake_entries['ZEPHYR_RUNNERS_YAML']) as f:
+            doc = yaml.load(f)
+        return doc['flash-runner']
+
     def _get_device_args(self, cmake_entries):
-        flash_runner = cmake_entries['ZEPHYR_BOARD_FLASH_RUNNER']
+        flash_runner = self._get_flash_runner(cmake_entries)
+
         if flash_runner == 'nrfjprog':
             return self._get_nrf_device_args()
         elif flash_runner == 'openocd':
@@ -326,7 +347,8 @@ class ZephyrFlasher(tvm.micro.compiler.Flasher):
 
     def _find_serial_port(self, micro_binary):
         cmake_entries = read_cmake_cache(micro_binary.abspath(micro_binary.labelled_files['cmake_cache'][0]))
-        flash_runner = cmake_entries['ZEPHYR_BOARD_FLASH_RUNNER']
+        flash_runner = self._get_flash_runner(cmake_entries)
+
         if flash_runner == 'nrfjprog':
             return self._find_nrf_serial_port(cmake_entries)
         elif flash_runner == 'openocd':
