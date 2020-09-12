@@ -36,7 +36,7 @@ def _make_session(mod):
     project_dir=project_dir,
     board='nucleo_f746zg',
     zephyr_toolchain_variant='zephyr',
-#    env_vars={'GNUARMEMB_TOOLCHAIN_PATH': '/usr/local'},
+    env_vars={'ZEPHYR_BOARD_FLASH_RUNNER': 'openocd'},
   )
 
   opts = tvm.micro.default_options(f'{project_dir}/crt')
@@ -62,6 +62,9 @@ def _make_session(mod):
       # the binary compiler is expecting those mutations to be in bin_opts.
       # TODO(weberlo) fix this very bizarre behavior
       workspace, compiler, mod, lib_opts=opts['lib_opts'], bin_opts=opts['bin_opts'])
+    os.system(f'ls -R {session_kw["binary"].base_dir}')
+    os.system(f'cat {session_kw["binary"].base_dir}/CMakeCache.txt')
+    os.system(f'cat {session_kw["binary"].base_dir}/zephyr/runners.yaml')
     if os.path.exists(prev_build):
       os.unlink(prev_build)
     session_kw['binary'].archive(prev_build)

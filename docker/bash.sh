@@ -131,6 +131,7 @@ fi
 ${DOCKER_BINARY} run --pid=host\
     -v ${WORKSPACE}:/workspace \
     -v ${SCRIPT_DIR}:/docker \
+    --device /dev/bus/usb:/dev/bus/usb:rwm \
     "${EXTRA_MOUNTS[@]}" \
     -w /workspace \
     -e "CI_BUILD_HOME=/workspace" \

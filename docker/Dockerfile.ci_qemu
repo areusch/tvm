@@ -64,7 +64,3 @@ RUN bash /install/ubuntu_install_qemu.sh
 COPY install/ubuntu_install_zephyr.sh /install/ubuntu_install_zephyr.sh
 RUN bash /install/ubuntu_install_zephyr.sh
 ENV ZEPHYR_BASE=/opt/zephyrproject/zephyr
-
-# Install microTVM deps
-COPY install/ubuntu_install_microtvm.sh /install/ubuntu_install_microtvm.sh
-RUN bash /install/ubuntu_install_microtvm.sh
