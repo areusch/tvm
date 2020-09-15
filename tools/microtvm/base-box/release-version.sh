@@ -1,7 +1,13 @@
 #!/bin/bash -e
 
+SKIP_ADD=( )
+if [ "$1" == "--skip-add" ]; then
+    SKIP_ADD=( "-var" "skip_add=true" )
+    shift
+fi
+
 if [ $# -ne 1 ]; then
-    echo "usage: $0 <version>"
+    echo "usage: $0 [--skip-add] <version>"
     exit 2
 fi
 
@@ -16,5 +22,5 @@ fi
 ALL_PROVIDERS=( virtualbox )
 for provider in "${ALL_PROVIDERS[@]}"; do
     set -x
-    packer build -var-file=api-token -var "provider=${provider}" -var "version=$1" packer.hcl
+    packer build -var-file=api-token "${SKIP_ADD[@]}" -var "provider=${provider}" -var "version=$1" packer.hcl
 done

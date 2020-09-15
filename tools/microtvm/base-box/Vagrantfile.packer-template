@@ -19,6 +19,10 @@ Vagrant.configure("2") do |config|
     config.vm.synced_folder ".", "/vagrant", disabled: true
   {{- end}}
 
-  load "Vagrantfile.provision"
+  if File.exist?("Vagrantfile.provision")
+      load "Vagrantfile.provision"
+  else
+      load "../Vagrantfile.provision"
+  end
   microtvm_provision config, ".."
 end

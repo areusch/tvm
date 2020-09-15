@@ -2,7 +2,8 @@
     "variables": {
         "provider": null,
         "version": null,
-        "access_token": null
+        "access_token": null,
+        "skip_add": false
     },
     "builders": [
         {
@@ -11,7 +12,7 @@
             "source_path": "generic/ubuntu2004",
             "provider": "virtualbox",
             "template": "Vagrantfile.packer-template",
-            "skip_add": true
+            "skip_add": "{{user `skip_add`}}"
         }
     ],
     "post-processors": [
