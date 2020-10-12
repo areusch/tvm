@@ -229,6 +229,12 @@ class StorageAllocator : public StorageAllocaBaseVisitor {
     return smap;
   }
 
+  void FillStorageIdSizes(Array<Integer>* sizes) {
+    for (StorageToken* t : data_) {
+      sizes->push_back(GetMemorySize(t));
+    }
+  }
+
  protected:
   using StorageAllocaBaseVisitor::VisitExpr_;
   // override create token by getting token as prototype requirements.
@@ -376,8 +382,35 @@ class StorageAllocator : public StorageAllocaBaseVisitor {
   std::unordered_map<const ExprNode*, std::vector<StorageToken*> > prototype_;
 };
 
-Map<Expr, Array<IntegerArray> > GraphPlanMemory(const Function& func) {
-  return StorageAllocator().Plan(func);
+class GraphPlanMemoryModule : public runtime::ModuleNode {
+ public:
+  GraphPlanMemoryModule(const Function& func) : func_{func} {}
+
+  virtual PackedFunc GetFunction(const std::string& name, const ObjectPtr<Object>& sptr_to_self) {
+    if (name == "plan") {
+      return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
+        *rv = allocator_.Plan(func_);
+      });
+    } else if (name == "get_storage_token_sizes") {
+      return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
+        Array<Integer> storage_id_sizes;
+        allocator_.FillStorageIdSizes(&storage_id_sizes);
+        *rv = storage_id_sizes;
+      });
+    } else {
+      return PackedFunc();
+    }
+  }
+
+  const char* type_key() const final { return "RelayGraphPlanMemoryModule"; }
+
+ private:
+  StorageAllocator allocator_;
+  Function func_;
+};
+
+runtime::Module GraphPlanMemory(const Function& func) {
+  return runtime::Module(make_object<GraphPlanMemoryModule>(func));
 }
 
 TVM_REGISTER_GLOBAL("relay.backend.GraphPlanMemory").set_body_typed(GraphPlanMemory);

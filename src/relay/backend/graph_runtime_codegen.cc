@@ -181,6 +181,157 @@ class GraphOpNode : public GraphNode {
   const std::string op_type_name_{"tvm_op"};
 };
 
+class AotCodegen {
+ public:
+
+  void DeclareFunction(std::string func_name) {
+    ss_ << "int " << func_name << "(TVMValue* values, int* tcodes, int nargs, TVMValue* out_ret_value, "
+        << "int* out_ret_code, void* resource_handle) {" << std::endl;
+  }
+
+  void FinishFunctionDecl(int nargs, Array<Integer> storage_token_sizes) {
+    for (int i = nargs + 1; i < storage_token_sizes.size(); ++i) {
+      ss_ << "    uint8_t* sid_" << i << ";" << std::endl;
+    }
+
+    for (int i = nargs + 1; i < storage_token_sizes.size(); ++i) {
+      ss_ << "    sid_" << i << " = TVMBackendAllocWorkspace(kDLCPU, 0, " << storage_token_sizes[i] << ", kDLInt, 8);" << std::endl;
+    }
+  }
+
+  void WriteDLTensor(std::ostream& stream, std::string storage_class_modifiers, std::string name, size_t indent,
+                     std::vector<int64_t> shape, std::string data_array) {
+    std::string indent_str(indent, ' ');
+    auto ndim = shape.size();
+    stream << indent_str << storage_class_modifiers << "int64_t " << name << "_shape[" << ndim << "] = {";
+    for (int i = 0; i < ndim; ++i) {
+      if (i > 0) {
+        stream << ", ";
+      }
+      stream << shape[i];
+    }
+    stream << "};" << std::endl;
+    stream << indent_str << storage_class_modifiers << " DLTensor " << name << " = {" << std::endl
+           << indent_str << "    " << data_array << ",  // data" << std::endl
+           << indent_str << "    {kDLCPU, 0},  // context" << std::endl
+           << indent_str << "    " << ndim << "  // ndim " << std::endl
+           << indent_str << "    " << name << "_shape,  // shape" << std::endl
+           << indent_str << "    NULL,  // stride" << std::endl
+           << indent_str << "    0  // byte_offset" << std::endl
+           << indent_str << "};" << std::endl;
+  }
+
+  void AddConstant(Expr expr, std::string name, runtime::NDArray data) {
+    params_[expr] = std::make_pair(name, data);
+    int64_t size = 1;
+    auto shape_vec = data.Shape();
+    for (auto dim : shape_vec) {
+      size *= dim;
+    }
+    std::string param_name = name + "_param";
+    std::string param_data_name = param_name + "_data";
+    param_decl_ << "const " << data.DataType() << " " << param_data_name << "[" << size << "] = {" << std::endl;
+    param_decl_ << "// TODO" << std::endl;
+    param_decl_ << "};" << std::endl;
+    WriteDLTensor(param_decl_, "const", param_name, 0, data.Shape(), param_data_name);
+  }
+
+  void AddInput(Var v) {
+    inputs_.emplace_back(v);
+  }
+
+  void _SidToArg(int return_value_index, const Array<IntegerArray>& sids, Expr exp, std::vector<std::string>* values, std::vector<std::string>* tcodes) {
+    CHECK(sids.size() == 2 && sids[0].size() == 1) << "don't know what to do in this case";
+    if (uint64_t(sids[0][0]) == return_value_index) {
+      // NOTE: each function is presumed to have 1 return value.
+      values->emplace_back((std::stringstream() << "values[" << return_value_index << "]").str());
+      tcodes->emplace_back((std::stringstream() << "tcodes[" << return_value_index << "]").str());
+      return;
+    }
+
+    auto checked_type = exp->checked_type();
+    const auto* tensor_type = checked_type.as<TensorTypeNode>();
+    CHECK(tensor_type != nullptr) << "cannot convert expr " << exp << " to tensor";
+    std::string sid_name = (std::stringstream() << "sid_" << sids[0][0]).str();
+    std::string sid_tensor_name = sid_name + "_tensor";
+    WriteDLTensor(ss_, "", sid_tensor_name, 8, _ShapeToJSON(tensor_type->shape), sid_name);
+    values->emplace_back(std::string{"&"} + sid_tensor_name);
+    tcodes->emplace_back("kDLTensor");
+  }
+
+  void AddFunctionCall(std::string op_name, const CallNode* op, std::string func_name, const Map<Expr,Array<IntegerArray>> storage_device_map) {
+    auto nargs = op->args.size();
+    std::vector<std::string> values;
+    std::vector<std::string> tcodes;
+    ss_ << "    {" << std::endl;
+    for (int i = 0; i < nargs; ++i) {
+      Expr arg = op->args[i];
+      auto input_iter = std::find(inputs_.begin(), inputs_.end(), arg);
+      if (input_iter != inputs_.end()) {
+        int index = std::distance(inputs_.begin(), input_iter);
+        values.emplace_back((std::stringstream() << "values[" << index << "]").str());
+        tcodes.emplace_back((std::stringstream() << "tcodes[" << index << "]").str());
+      } else if (params_.find(arg) != params_.end()) {
+        auto value = params_[arg];
+        values.emplace_back((std::stringstream() << "&" << value.first << "_param").str());
+        tcodes.emplace_back("kDLTensor");
+      } else {
+        Array<IntegerArray> sids = storage_device_map[arg];
+        _SidToArg(inputs_.size(), sids, arg, &values, &tcodes);
+      }
+    }
+
+    auto checked_type = op->checked_type();
+    const auto* tensor_type = checked_type.as<TensorTypeNode>();
+    CHECK(tensor_type != nullptr) << "cannot convert return value of " << op << " to tensor";
+    Array<IntegerArray> expr_sids = storage_device_map[GetRef<Expr>(op)];
+    Expr exp = GetRef<Expr>(op);
+    _SidToArg(inputs_.size(), storage_device_map[exp], exp, &values, &tcodes);
+
+    ss_ << "        TVMValue subcall_values[" << nargs + 1 << "] = {" << std::endl;
+    for (int i = 0; i < values.size(); i++) {
+      ss_ << "            " << values[i] << (i < (nargs - 1) ? ", " : "") << std::endl;
+    }
+    ss_ << "        };" << std::endl
+        << "        int subcall_tcodes[" << nargs + 1 << "] = {" << std::endl;
+    for (int i = 0; i < tcodes.size(); ++i) {
+      ss_ << "            " << tcodes[i] << (i < (nargs - 1) ? ", " : "") << std::endl;
+    }
+    ss_ << "        };" << std::endl;
+
+    ss_ << "        TVMValue subcall_ret_value;" << std::endl
+        << "        int subcall_ret_tcode;" << std::endl
+        << "        rv = " << func_name << "(values, tcodes, " << nargs + 1 << ", &ret_value, &ret_tcode, NULL);" << std::endl
+        << "    }" << std::endl;
+  }
+
+  void Print() {
+    LOG(INFO) << "AOT params: " << std::endl << param_decl_.str();
+    LOG(INFO) << "AOT codegen: " << std::endl << ss_.str();
+  }
+
+ private:
+  /*!
+   * \brief Extract shape from expr to vector<int64_t>
+   *
+   * \param shape
+   * \return std::vector<int64_t>
+   */
+  std::vector<int64_t> _ShapeToJSON(tvm::Array<IndexExpr> shape) {
+    std::vector<int64_t> ret;
+    for (IndexExpr dim : shape) {
+      const int64_t* pval = tir::as_const_int(dim);
+      ret.push_back(*pval);
+    }
+    return ret;
+  }
+
+  std::stringstream param_decl_;
+  std::stringstream ss_;
+  std::vector<Expr> inputs_;
+  std::map<Expr, std::pair<std::string, runtime::NDArray>> params_;
+};
+
 /*! \brief Code generator for graph runtime */
 class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<GraphNodeRef>> {
  public:
@@ -191,12 +342,21 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
 
   LoweredOutput Codegen(relay::Function func) {
     auto pf = GetPackedFunc("relay.backend.GraphPlanMemory");
-    storage_device_map_ = (*pf)(func);
+    graph_plan_memory_module_ = (*pf)(func);
+    storage_device_map_ = graph_plan_memory_module_.GetFunction("plan")();
+    storage_token_sizes_ = graph_plan_memory_module_.GetFunction("get_storage_token_sizes")();
+
     // First we convert all the parameters into input nodes.
+    std::string func_name{"unnamed"};
+//    auto name = func->attrs->dict.find("global_symbol");
+//    aot_.DeclareFunction(name != func->attrs->dict.end() ? Downcast<String>((*name).second) : "unnamed_func");
+    aot_.DeclareFunction(func_name);
     for (auto param : func->params) {
       auto node_ptr = GraphInputNode::make_node_ptr(param->name_hint(), GraphAttrs());
       var_map_[param.get()] = AddNode(node_ptr, param);
+      aot_.AddInput(param);
     }
+    aot_.FinishFunctionDecl(func->params.size(), storage_token_sizes_);
     heads_ = VisitExpr(func->body);
     std::ostringstream os;
     dmlc::JSONWriter writer(&os);
@@ -212,8 +372,10 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
       auto& mod = ret.lowered_funcs[kv.first];
       mod->Update(kv.second);
       ret.lowered_funcs.Set(kv.first, mod);
+      LOG(INFO) << "lowered: " << kv.first << ":" << std::endl << mod;
     }
     ret.external_mods = compile_engine_->LowerExternalFunctions();
+    aot_.Print();
     return ret;
   }
 
@@ -314,6 +476,7 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
     std::string name = "p" + std::to_string(index);
     params_[name] = op->data;
     auto node = GraphInputNode::make_node_ptr(name, GraphAttrs());
+    aot_.AddConstant(expr, name, op->data);
     return AddNode(node, expr);
   }
 
@@ -338,6 +501,7 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
       }
     }
     auto node = GraphOpNode::make_node_ptr(op_name, GraphAttrs(), func_name, inputs, GraphAttrs());
+    aot_.AddFunctionCall(op_name, op, func_name, storage_device_map_);
     return AddNode(node, GetRef<Expr>(op));
   }
 
@@ -412,6 +576,7 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
   std::vector<GraphNodeRef> VisitExpr_(const LetNode* op) override {
     CHECK_EQ(var_map_.count(op->var.get()), 0);
     var_map_[op->var.get()] = VisitExpr(op->value);
+    // TODO aot_.AddLet(
     return VisitExpr(op->body);
   }
   std::vector<GraphNodeRef> VisitExpr_(const TupleGetItemNode* op) override {
@@ -548,6 +713,12 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
   std::unordered_map<std::string, size_t> name_map_;
   /*! \brief compile engine */
   CompileEngine compile_engine_;
+  /*! \brief AOT codegen */
+  AotCodegen aot_;
+  /*! \brief sizes of each storage token used by the memory planner */
+  Array<Integer> storage_token_sizes_;
+  /*! \brief GraphPlanMemory module */
+  runtime::Module graph_plan_memory_module_;
 };
 
 class GraphRuntimeCodegenModule : public runtime::ModuleNode {

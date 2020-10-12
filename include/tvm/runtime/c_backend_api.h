@@ -75,9 +75,9 @@ TVM_DLL int TVMBackendRegisterSystemLibSymbol(const char* name, void* ptr);
  *
  * \note The result allocated space is ensured to be aligned to kTempAllocaAlignment.
  *
- * \param nbytes The size of the space requested.
  * \param device_type The device type which the space will be allocated.
  * \param device_id The device id which the space will be allocated.
+ * \param nbytes The size of the space requested.
  * \param dtype_code_hint The type code of the array elements. Only used in
  * certain backends such as OpenGL.
  * \param dtype_bits_hint The type bits of the array elements. Only used in
