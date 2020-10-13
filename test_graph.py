@@ -36,7 +36,8 @@ def test_relay_model():
 #  model["main"] = func
 #  model = tvm.parser.fromtext(RELAY_MODEL)
   mod, params = tvm.relay.testing.create_workload(func)
-  params['weight'].copyfrom(np.random.random_integers(-127, 128, params['weight'].shape))
+  weight_data = np.random.random_integers(-127, 128, params['weight'].shape).astype("int8")
+  params['weight'].copyfrom(weight_data)
 
 #  print(str(mod))
   target = 'c -mcpu=native --runtime=c --system-lib'
@@ -60,11 +61,24 @@ def test_relay_model():
   with tvm.micro.Session(binary=micro_bin, flasher=compiler.flasher(debug=False)) as sess:
     mod = sess.get_system_lib()
     main = mod.get_function('main_func')
-    A = tvm.nd.array(np.random.random_integers(0, 255, [1, 64, 64, 3]).astype("uint8"), ctx=sess.context)
-    B = tvm.nd.array(np.zeros([1, 60, 60, 3], dtype="uint8"), ctx=sess.context)
+    A_data = np.random.random_integers(0, 255, [1, 64, 64, 3]).astype("uint8")
+    A = tvm.nd.array(A_data, ctx=sess.context)
+    B = tvm.nd.array(np.zeros([1, 8, 60, 60], dtype="uint8"), ctx=sess.context)
     main(A, B)
-    print(B.asnumpy())
+    aot_output = B.asnumpy()
 
+
+  with tvm.micro.Session(binary=micro_bin, flasher=compiler.flasher(debug=False)) as sess:
+    graph_mod = tvm.micro.create_local_graph_runtime(
+      lib.get_json(), sess.get_system_lib(), sess.context
+    )
+
+    graph_mod.set_input(**lib.params)
+    graph_mod.run(data=tvm.nd.array(A_data, ctx=sess.context))
+    graph_output = graph_mod.get_output(0).asnumpy()
+
+  np.testing.assert_allclose(aot_output, graph_output)
+  print("ZOMG")
 
 
 test_relay_model()
