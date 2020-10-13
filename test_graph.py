@@ -12,10 +12,10 @@ import tvm.relay.testing
 
 RELAY_MODEL = """
 #[version = "0.0.5"]
-def @main(%data : Tensor[(1, 64, 64, 3), uint8], %mean_data : Tensor[(1, 64, 64, 3), int8], %conv0_weight : Tensor[(5, 5, 8, 3), int8], %conv0_bias : Tensor[(1, 32, 32, 8), int8]) {
+def @main(%data : Tensor[(1, 64, 64, 3), uint8], %weight : Tensor[(5, 5, 8, 3), int8]) {
     %1 = nn.conv2d(
          %data,
-         %conv0_weight,
+         %weight,
          padding=[2, 2],
          channels=32,
          kernel_size=[5, 5],
@@ -28,15 +28,10 @@ def @main(%data : Tensor[(1, 64, 64, 3), uint8], %mean_data : Tensor[(1, 64, 64,
 
 
 def test_relay_model():
-  data = tvm.relay.var("data", shape=(1, 3, 64, 64), dtype="uint8")
-  weight = tvm.relay.var("weight", shape=(8, 3, 5, 5), dtype="int8")
-  out = tvm.relay.nn.conv2d(data=data, weight=weight, kernel_size=5, data_layout='NCHW', kernel_layout='OIHW')
-  func = tvm.relay.Function(tvm.relay.analysis.free_vars(out), out)
-#  model = tvm.IRModule()
-#  model["main"] = func
-#  model = tvm.parser.fromtext(RELAY_MODEL)
-  mod, params = tvm.relay.testing.create_workload(func)
-  weight_data = np.random.random_integers(-127, 128, params['weight'].shape).astype("int8")
+  model = tvm.IRModule()
+  model = tvm.parser.fromtext(RELAY_MODEL)
+#  mod, params = tvm.relay.testing.create_workload(func)
+  weight_data = np.random.random_integers(-127, 128, model['main'].params['weight'].shape).astype("int8")
   params['weight'].copyfrom(weight_data)
 
 #  print(str(mod))
