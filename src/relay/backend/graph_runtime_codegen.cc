@@ -34,6 +34,7 @@
 
 #include "compile_engine.h"
 #include "utils.h"
+#include "../../printer/text_printer.h"
 
 namespace tvm {
 namespace relay {
@@ -181,10 +182,65 @@ class GraphOpNode : public GraphNode {
   const std::string op_type_name_{"tvm_op"};
 };
 
+class AotReturnSidVisitor : public ExprVisitor {
+ public:
+  AotReturnSidVisitor(Map<Expr,Array<IntegerArray>> storage_device_map) : storage_device_map_{storage_device_map}, return_sid_{-1} {}
+
+  int64_t FindReturnSid(Function func) {
+    VisitExpr(func->body);
+    CHECK(return_sid_ != -1);
+    return return_sid_;
+  }
+
+ protected:
+  void AssignReturnSid(Expr e) {
+    auto iter = storage_device_map_.find(e);
+    if (iter != storage_device_map_.end()) {
+      return_sid_ = (*iter).second[0][0];
+      LOG(INFO) << "Set Sid" << return_sid_;
+    }
+  }
+
+  void VisitExpr_(const ConstantNode* cn) override {
+    LOG(INFO) << "Visit Const " << AsText(GetRef<Expr>(cn), false, nullptr);
+    ExprVisitor::VisitExpr_(cn);
+    AssignReturnSid(GetRef<Expr>(cn));
+  }
+
+  void VisitExpr_(const VarNode* vn) override {
+    LOG(INFO) << "Visit Var " << AsText(GetRef<Expr>(vn), false, nullptr);
+    ExprVisitor::VisitExpr_(vn);
+    AssignReturnSid(GetRef<Expr>(vn));
+  }
+
+  void VisitExpr_(const CallNode* cn) override {
+//    LOG(INFO) << "Visit Call: " << GetRef<Expr>(cn);
+    LOG(INFO) << "Visit Call " << AsText(GetRef<Expr>(cn), false, nullptr);
+    ExprVisitor::VisitExpr_(cn);
+    AssignReturnSid(GetRef<Expr>(cn));
+  }
+
+  void VisitExpr_(const LetNode* op) override {
+    VisitExpr(op->body);
+  }
+
+ private:
+  Map<Expr,Array<IntegerArray>> storage_device_map_;
+  int64_t return_sid_;
+};
+
 class AotCodegen {
  public:
 
+  void FindReturnSid(Function func, const Map<Expr,Array<IntegerArray>>& storage_device_map) {
+    auto visitor = AotReturnSidVisitor(storage_device_map);
+    return_sid_ = visitor.FindReturnSid(func);
+    LOG(INFO) << "return sid = " << return_sid_;
+  }
+
   void DeclareFunction(std::string func_name) {
+    param_decl_ << "#include <inttypes.h>" << std::endl
+                << "#include <dlpack/dlpack.h>" << std::endl;
     ss_ << "int " << func_name << "(TVMValue* values, int* tcodes, int nargs, TVMValue* out_ret_value, "
         << "int* out_ret_code, void* resource_handle) {" << std::endl;
   }
@@ -203,7 +259,7 @@ class AotCodegen {
                      std::vector<int64_t> shape, std::string data_array) {
     std::string indent_str(indent, ' ');
     auto ndim = shape.size();
-    stream << indent_str << storage_class_modifiers << "int64_t " << name << "_shape[" << ndim << "] = {";
+    stream << indent_str << storage_class_modifiers << " int64_t " << name << "_shape[" << ndim << "] = {";
     for (int i = 0; i < ndim; ++i) {
       if (i > 0) {
         stream << ", ";
@@ -212,9 +268,10 @@ class AotCodegen {
     }
     stream << "};" << std::endl;
     stream << indent_str << storage_class_modifiers << " DLTensor " << name << " = {" << std::endl
-           << indent_str << "    " << data_array << ",  // data" << std::endl
+           << indent_str << "    (void*) " << data_array << ",  // data" << std::endl
            << indent_str << "    {kDLCPU, 0},  // context" << std::endl
-           << indent_str << "    " << ndim << "  // ndim " << std::endl
+           << indent_str << "    " << ndim << ",  // ndim" << std::endl
+           << indent_str << "    {0, 0, 0},  // dtype" << std::endl
            << indent_str << "    " << name << "_shape,  // shape" << std::endl
            << indent_str << "    NULL,  // stride" << std::endl
            << indent_str << "    0  // byte_offset" << std::endl
@@ -230,8 +287,13 @@ class AotCodegen {
     }
     std::string param_name = name + "_param";
     std::string param_data_name = param_name + "_data";
-    param_decl_ << "const " << data.DataType() << " " << param_data_name << "[" << size << "] = {" << std::endl;
-    param_decl_ << "// TODO" << std::endl;
+    param_decl_ << "const " << data.DataType() << "_t " << param_data_name << "[" << size << "] = {" << std::endl;
+    for (int i = 0; i < size; i++) {
+      param_decl_ << int(((int8_t*) data->data)[i]);
+      if (i < size - 1) {
+        param_decl_ << ", ";
+      }
+    }
     param_decl_ << "};" << std::endl;
     WriteDLTensor(param_decl_, "const", param_name, 0, data.Shape(), param_data_name);
   }
@@ -242,7 +304,7 @@ class AotCodegen {
 
   void _SidToArg(int return_value_index, const Array<IntegerArray>& sids, Expr exp, std::vector<std::string>* values, std::vector<std::string>* tcodes) {
     CHECK(sids.size() == 2 && sids[0].size() == 1) << "don't know what to do in this case";
-    if (uint64_t(sids[0][0]) == return_value_index) {
+    if (uint64_t(sids[0][0]) == return_sid_) {
       // NOTE: each function is presumed to have 1 return value.
       values->emplace_back((std::stringstream() << "values[" << return_value_index << "]").str());
       tcodes->emplace_back((std::stringstream() << "tcodes[" << return_value_index << "]").str());
@@ -255,11 +317,11 @@ class AotCodegen {
     std::string sid_name = (std::stringstream() << "sid_" << sids[0][0]).str();
     std::string sid_tensor_name = sid_name + "_tensor";
     WriteDLTensor(ss_, "", sid_tensor_name, 8, _ShapeToJSON(tensor_type->shape), sid_name);
-    values->emplace_back(std::string{"&"} + sid_tensor_name);
-    tcodes->emplace_back("kDLTensor");
+    values->emplace_back(std::string{"{.v_handle = &"} + sid_tensor_name + "}");
+    tcodes->emplace_back("kTVMDLTensorHandle");
   }
 
-  void AddFunctionCall(std::string op_name, const CallNode* op, std::string func_name, const Map<Expr,Array<IntegerArray>> storage_device_map) {
+  void AddFunctionCall(std::string op_name, const CallNode* op, std::string func_name, const Map<Expr,Array<IntegerArray>>& storage_device_map) {
     auto nargs = op->args.size();
     std::vector<std::string> values;
     std::vector<std::string> tcodes;
@@ -274,7 +336,7 @@ class AotCodegen {
       } else if (params_.find(arg) != params_.end()) {
         auto value = params_[arg];
         values.emplace_back((std::stringstream() << "&" << value.first << "_param").str());
-        tcodes.emplace_back("kDLTensor");
+        tcodes.emplace_back("kTVMDLTensorHandle");
       } else {
         Array<IntegerArray> sids = storage_device_map[arg];
         _SidToArg(inputs_.size(), sids, arg, &values, &tcodes);
@@ -288,21 +350,34 @@ class AotCodegen {
     Expr exp = GetRef<Expr>(op);
     _SidToArg(inputs_.size(), storage_device_map[exp], exp, &values, &tcodes);
 
-    ss_ << "        TVMValue subcall_values[" << nargs + 1 << "] = {" << std::endl;
+    ss_ << "        TVMValue subcall_values[" << values.size() << "] = {" << std::endl;
     for (int i = 0; i < values.size(); i++) {
-      ss_ << "            " << values[i] << (i < (nargs - 1) ? ", " : "") << std::endl;
+      ss_ << "            " << values[i] << (i < (values.size() - 1) ? ", " : "") << std::endl;
     }
     ss_ << "        };" << std::endl
-        << "        int subcall_tcodes[" << nargs + 1 << "] = {" << std::endl;
+        << "        int subcall_tcodes[" << tcodes.size() << "] = {" << std::endl;
     for (int i = 0; i < tcodes.size(); ++i) {
-      ss_ << "            " << tcodes[i] << (i < (nargs - 1) ? ", " : "") << std::endl;
+      ss_ << "            " << tcodes[i] << (i < (tcodes.size() - 1) ? ", " : "") << std::endl;
     }
     ss_ << "        };" << std::endl;
 
     ss_ << "        TVMValue subcall_ret_value;" << std::endl
         << "        int subcall_ret_tcode;" << std::endl
-        << "        rv = " << func_name << "(values, tcodes, " << nargs + 1 << ", &ret_value, &ret_tcode, NULL);" << std::endl
+        << "        int rv;" << std::endl
+        << "        rv = " << func_name << "(subcall_values, subcall_tcodes, " << nargs + 1 << ", &subcall_ret_value, &subcall_ret_tcode, NULL);" << std::endl
+        << "        if (rv != 0) {" << std::endl
+        << "            return rv;" << std::endl
+        << "        }" << std::endl
         << "    }" << std::endl;
+  }
+
+  void FinishFunction() {
+    ss_ << "    return 0;" << std::endl
+        << "}" << std::endl;
+  }
+
+  std::string Get() {
+    return param_decl_.str() + ss_.str();
   }
 
   void Print() {
@@ -330,6 +405,7 @@ class AotCodegen {
   std::stringstream ss_;
   std::vector<Expr> inputs_;
   std::map<Expr, std::pair<std::string, runtime::NDArray>> params_;
+  int64_t return_sid_;
 };
 
 /*! \brief Code generator for graph runtime */
@@ -347,7 +423,7 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
     storage_token_sizes_ = graph_plan_memory_module_.GetFunction("get_storage_token_sizes")();
 
     // First we convert all the parameters into input nodes.
-    std::string func_name{"unnamed"};
+    std::string func_name{"main_func"};
 //    auto name = func->attrs->dict.find("global_symbol");
 //    aot_.DeclareFunction(name != func->attrs->dict.end() ? Downcast<String>((*name).second) : "unnamed_func");
     aot_.DeclareFunction(func_name);
@@ -357,6 +433,7 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
       aot_.AddInput(param);
     }
     aot_.FinishFunctionDecl(func->params.size(), storage_token_sizes_);
+    aot_.FindReturnSid(func, storage_device_map_);
     heads_ = VisitExpr(func->body);
     std::ostringstream os;
     dmlc::JSONWriter writer(&os);
@@ -375,8 +452,13 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
       LOG(INFO) << "lowered: " << kv.first << ":" << std::endl << mod;
     }
     ret.external_mods = compile_engine_->LowerExternalFunctions();
-    aot_.Print();
+    aot_.FinishFunction();
+//    aot_.Print();
     return ret;
+  }
+
+  std::string GetAOTBlob() {
+    return aot_.Get();
   }
 
  protected:
@@ -692,7 +774,6 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
     return _GetUniqueName(name + std::to_string(index));
   }
 
- protected:
   /*! \brief nodes */
   std::vector<GraphObjectPtr> nodes_;
   /*! \brief output of graph */
@@ -769,6 +850,10 @@ class GraphRuntimeCodegenModule : public runtime::ModuleNode {
     } else if (name == "get_external_modules") {
       return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
         *rv = this->output_.external_mods;
+      });
+    } else if (name == "get_aot") {
+      return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
+        *rv = this->codegen_->GetAOTBlob();
       });
     } else {
       return PackedFunc([](TVMArgs args, TVMRetValue* rv) {});

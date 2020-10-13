@@ -80,6 +80,7 @@ class BuildModule(object):
         self._optimize = self.mod["optimize"]
         self._set_params_func = self.mod["set_params"]
         self._get_params_func = self.mod["get_params"]
+        self._get_aot_func = self.mod["get_aot"]
 
     def build(self, mod, target=None, target_host=None, params=None):
         """
@@ -128,8 +129,9 @@ class BuildModule(object):
         graph_json = self.get_json()
         mod = self.get_module()
         params = self.get_params()
+        aot = self.get_aot()
 
-        return graph_json, mod, params
+        return graph_json, mod, params, aot
 
     def optimize(self, mod, target=None, params=None):
         """
@@ -184,6 +186,9 @@ class BuildModule(object):
         for key, value in params.items():
             ret[key] = value.data
         return ret
+
+    def get_aot(self):
+        return self._get_aot_func()
 
 
 def build(mod, target=None, target_host=None, params=None, mod_name="default"):
@@ -256,9 +261,9 @@ def build(mod, target=None, target_host=None, params=None, mod_name="default"):
 
     with tophub_context:
         bld_mod = BuildModule()
-        graph_json, mod, params = bld_mod.build(mod, target, target_host, params)
+        graph_json, mod, params, aot = bld_mod.build(mod, target, target_host, params)
         mod = _graph_runtime_factory.GraphRuntimeFactoryModule(graph_json, mod, mod_name, params)
-        return mod
+        return mod, aot
 
 
 def optimize(mod, target=None, params=None):

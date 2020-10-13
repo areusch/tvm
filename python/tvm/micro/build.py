@@ -120,8 +120,9 @@ def build_static_runtime(workspace, compiler, module, lib_opts=None, bin_opts=No
     os.makedirs(mod_build_dir)
     mod_src_dir = workspace.relpath(os.path.join("src", "module"))
     os.makedirs(mod_src_dir)
-    mod_src_path = os.path.join(mod_src_dir, "module.c")
-    module.save(mod_src_path, "cc")
+#    mod_src_path = os.path.join(mod_src_dir, "module.c")
+#    module.save(mod_src_path, "cc")
+    mod_src_path = module
 
     libs = []
     for lib_src_dir in RUNTIME_LIB_SRC_DIRS:

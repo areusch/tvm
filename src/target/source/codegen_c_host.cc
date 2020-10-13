@@ -277,7 +277,9 @@ inline void CodeGenCHost::PrintTernaryCondExpr(const T* op, const char* compare,
 
 void CodeGenCHost::GenerateFuncRegistry() {
   decl_stream << "#include <tvm/runtime/crt/module.h>\n";
+  decl_stream << "int main_func(TVMValue* values, int* tcodes, int nargs, TVMValue* ret_value, int* ret_tcodes, void* resource_handle);\n";
   stream << "static TVMBackendPackedCFunc _tvm_func_array[] = {\n";
+  function_names_.push_back("main_func");
   for (auto f : function_names_) {
     stream << "    (TVMBackendPackedCFunc)" << f << ",\n";
   }

@@ -49,6 +49,7 @@ struct BuildOutput {
   std::string graph_json;
   runtime::Module mod;
   std::unordered_map<std::string, tvm::runtime::NDArray> params;
+  std::string aot;
 };
 
 /*!
@@ -76,6 +77,8 @@ struct GraphCodegen {
   Map<String, IRModule> GetIRModule() {
     return CallFunc<Map<String, IRModule>>("get_irmodule", nullptr);
   }
+
+  std::string GetAOT() { return CallFunc<std::string>("get_aot", nullptr); }
 
   std::unordered_map<std::string, tvm::runtime::NDArray> GetParams() {
     std::unordered_map<std::string, tvm::runtime::NDArray> ret;
@@ -147,6 +150,10 @@ class RelayBuildModule : public runtime::ModuleNode {
     } else if (name == "get_external_modules") {
       return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
         *rv = this->graph_codegen_->GetExternalModules();
+      });
+    } else if (name == "get_aot") {
+      return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
+        *rv = this->graph_codegen_->GetAOT();
       });
     } else if (name == "optimize") {
       return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
@@ -435,6 +442,7 @@ class RelayBuildModule : public runtime::ModuleNode {
 
     ret_.graph_json = graph_codegen_->GetJSON();
     ret_.params = graph_codegen_->GetParams();
+    ret_.aot = graph_codegen_->GetAOT();
 
     auto lowered_funcs = graph_codegen_->GetIRModule();
 
