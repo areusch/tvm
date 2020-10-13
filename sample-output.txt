@@ -1,0 +1,251 @@
+------------------- Graph -------------------
+{
+  "nodes": [
+    {
+      "op": "null", 
+      "name": "data", 
+      "inputs": []
+    }, 
+    {
+      "op": "tvm_op", 
+      "name": "fused_layout_transform_2", 
+      "attrs": {
+        "func_name": "fused_layout_transform_2", 
+        "flatten_data": "0", 
+        "num_inputs": "1", 
+        "num_outputs": "1"
+      }, 
+      "inputs": [
+        [
+          0, 
+          0, 
+          0
+        ]
+      ]
+    }, 
+    {
+      "op": "null", 
+      "name": "p0", 
+      "inputs": []
+    }, 
+    {
+      "op": "tvm_op", 
+      "name": "fused_nn_contrib_conv2d_NCHWc", 
+      "attrs": {
+        "func_name": "fused_nn_contrib_conv2d_NCHWc", 
+        "flatten_data": "0", 
+        "num_inputs": "2", 
+        "num_outputs": "1"
+      }, 
+      "inputs": [
+        [
+          1, 
+          0, 
+          0
+        ], 
+        [
+          2, 
+          0, 
+          0
+        ]
+      ]
+    }, 
+    {
+      "op": "tvm_op", 
+      "name": "fused_layout_transform_1", 
+      "attrs": {
+        "func_name": "fused_layout_transform_1", 
+        "flatten_data": "0", 
+        "num_inputs": "1", 
+        "num_outputs": "1"
+      }, 
+      "inputs": [
+        [
+          3, 
+          0, 
+          0
+        ]
+      ]
+    }
+  ], 
+  "arg_nodes": [0, 2], 
+  "heads": [
+    [
+      4, 
+      0, 
+      0
+    ]
+  ], 
+  "attrs": {
+    "dltype": [
+      "list_str", 
+      [
+        "uint8", 
+        "uint8", 
+        "int8", 
+        "uint8", 
+        "uint8"
+      ]
+    ], 
+    "storage_id": [
+      "list_int", 
+      [0, 1, 2, 3, 1]
+    ], 
+    "shape": [
+      "list_shape", 
+      [
+        [1, 3, 64, 64], 
+        [1, 1, 64, 64, 3], 
+        [1, 1, 5, 5, 3, 8], 
+        [1, 1, 60, 60, 8], 
+        [1, 8, 60, 60]
+      ]
+    ]
+  }, 
+  "node_row_ptr": [0, 1, 2, 3, 4, 5]
+}
+-------------------- AOT --------------------
+#include <inttypes.h>
+#include <dlpack/dlpack.h>
+const int8_t p0_param_data[600] = {
+-3, -116, 98, -99, -20, 28, 17, 52, 42, 37, 36, -116, 118, 113, 77, -61, -40, 71, 58, 32, 48, -95, 71, -62, -27, 34, -102, 65, 124, 124, 73, -9, -87, 6, 53, -102, -36, 18, 58, 20, -90, 48, -34, 23, -110, -46, -3, 78, 2, 8, -30, -42, 83, -79, -68, 28, 61, -122, -24, -24, -83, 41, -8, 117, -16, -29, -25, -63, -107, -8, 116, -44, 126, -8, -32, 89, -45, 0, 120, 101, 82, -89, -9, -116, -112, 116, 102, 123, 64, -106, 12, 102, 39, -9, 37, -80, 30, -101, -82, -54, 58, 11, 109, -71, 52, 36, -120, -37, 126, -106, 113, 77, 27, 21, 79, -96, -63, 118, -28, -46, 6, -79, -121, 9, 23, -59, -120, -106, -87, -39, 52, 110, -40, -33, 5, 31, 90, 43, -45, -48, 7, -90, -25, 37, 81, 72, -38, 83, -112, -110, 13, 40, -68, 50, -25, 35, 76, 27, -22, -88, -38, -5, 90, -44, 109, -8, -91, 72, 103, 112, -39, 12, 16, -124, -95, 107, 107, 80, 122, 2, -50, 16, -91, 86, 7, 58, 109, -112, 23, -100, -97, -74, 121, 55, 110, 93, -99, -26, 85, -53, 95, -43, 52, 127, 127, 113, -47, -50, 89, 18, -124, -76, -48, -76, -13, 71, 41, -31, -89, -10, -56, -33, 108, -98, -98, -13, 30, 17, 30, -110, 83, 50, 120, -26, 38, 122, -53, -49, 20, 10, 23, -27, -76, 52, -100, 88, -52, 114, 98, -118, 56, -126, -32, -117, 38, -101, 80, 90, 8, 13, 35, 60, 39, -112, -97, -45, -111, -46, 89, -98, 94, 30, -33, 120, -14, -111, -17, 18, 95, -12, -26, 117, -98, 46, 41, -41, 45, -109, -128, -40, 24, 56, -70, -25, -87, 62, 111, 5, 12, -94, 83, 4, -10, 13, -86, 86, -49, -117, 39, -32, -92, 30, -108, 22, 91, -112, -69, -4, -127, -69, 38, 50, 68, -94, 5, 104, 111, 114, 18, 56, -116, 117, 119, -119, -113, 54, -123, 127, -124, 4, 89, 31, 85, -103, -1, -103, 78, 45, -99, -54, -92, 65, 81, -27, 74, -22, 22, -71, -98, 61, 21, -125, -37, -21, 77, 76, -18, -13, 89, -33, -5, 103, 66, -98, 49, -126, -15, 69, -116, -47, -93, -98, 52, -85, -21, -119, 47, 89, -114, 67, -35, -111, -111, 3, -72, -87, -78, 68, 1, 37, -84, -16, -111, -57, -10, 29, -67, 83, -53, -117, -5, 86, 19, 94, 78, 65, -28, -44, -39, -55, 50, 72, -78, -117, -17, 99, -67, -106, 33, 96, 121, 3, -4, -122, 30, -99, -49, -67, 38, -27, 40, 4, 124, 78, -40, 81, 58, -21, 70, -116, -4, 95, 43, 35, -46, -98, 68, -89, -125, -69, 79, 8, 48, 99, 30, -50, 125, -21, -70, 99, -118, -95, -9, 99, -24, 68, 0, 59, -60, 18, 87, 39, 6, 86, -107, 52, -66, -4, 125, -116, 121, -44, 81, 5, -77, 127, 20, -30, 64, -47, -83, 0, -98, -92, -67, -27, -6, -49, -56, 117, -24, -114, -62, 14, -59, 115, -86, 62, 98, -99, 112, 111, 60, -63, -28, -1, 28, -7, 102, 66, 72, -16, 56, -54, 51, -126, -104, 101, -10, 33, 91, -37, 49, 59, -105, 20, 2, 2, -86, 82, 4, -108, 123, -10, -112, -62, -83, 88, -59, 124, 73, -46, -12, 24, 113, -27, 114, 67, -18, -15, 19, -77, 122, 93, -94, 17, -34, -68, -49, -51, 108, 65, 111, -125, 1, 27, 87, -59, 67, 7, -115, 93, 12, -116, 54, -31, -24, -16, 118, -104};
+const int64_t p0_param_shape[6] = {1, 1, 5, 5, 3, 8};
+const DLTensor p0_param = {
+    (void*) p0_param_data,  // data
+    {kDLCPU, 0},  // context
+    6,  // ndim
+    {0, 0, 0},  // dtype
+    p0_param_shape,  // shape
+    NULL,  // stride
+    0  // byte_offset
+};
+int main_func(TVMValue* values, int* tcodes, int nargs, TVMValue* out_ret_value, int* out_ret_code, void* resource_handle) {
+    uint8_t* sid_2;
+    uint8_t* sid_3;
+    sid_2 = TVMBackendAllocWorkspace(kDLCPU, 0, 600, kDLInt, 8);
+    sid_3 = TVMBackendAllocWorkspace(kDLCPU, 0, 28800, kDLInt, 8);
+    {
+        TVMValue subcall_values[2] = {
+            values[0], 
+            values[1]
+        };
+        int subcall_tcodes[2] = {
+            tcodes[0], 
+            tcodes[1]
+        };
+        TVMValue subcall_ret_value;
+        int subcall_ret_tcode;
+        int rv;
+        rv = fused_layout_transform_2(subcall_values, subcall_tcodes, 2, &subcall_ret_value, &subcall_ret_tcode, NULL);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+    {
+         int64_t sid_3_tensor_shape[5] = {1, 1, 60, 60, 8};
+         DLTensor sid_3_tensor = {
+            (void*) sid_3,  // data
+            {kDLCPU, 0},  // context
+            5,  // ndim
+            {0, 0, 0},  // dtype
+            sid_3_tensor_shape,  // shape
+            NULL,  // stride
+            0  // byte_offset
+        };
+        TVMValue subcall_values[3] = {
+            values[1], 
+            &p0_param, 
+            {.v_handle = &sid_3_tensor}
+        };
+        int subcall_tcodes[3] = {
+            tcodes[1], 
+            kTVMDLTensorHandle, 
+            kTVMDLTensorHandle
+        };
+        TVMValue subcall_ret_value;
+        int subcall_ret_tcode;
+        int rv;
+        rv = fused_nn_contrib_conv2d_NCHWc(subcall_values, subcall_tcodes, 3, &subcall_ret_value, &subcall_ret_tcode, NULL);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+    {
+         int64_t sid_3_tensor_shape[5] = {1, 1, 60, 60, 8};
+         DLTensor sid_3_tensor = {
+            (void*) sid_3,  // data
+            {kDLCPU, 0},  // context
+            5,  // ndim
+            {0, 0, 0},  // dtype
+            sid_3_tensor_shape,  // shape
+            NULL,  // stride
+            0  // byte_offset
+        };
+        TVMValue subcall_values[2] = {
+            {.v_handle = &sid_3_tensor}, 
+            values[1]
+        };
+        int subcall_tcodes[2] = {
+            kTVMDLTensorHandle, 
+            tcodes[1]
+        };
+        TVMValue subcall_ret_value;
+        int subcall_ret_tcode;
+        int rv;
+        rv = fused_layout_transform_1(subcall_values, subcall_tcodes, 2, &subcall_ret_value, &subcall_ret_tcode, NULL);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+    return 0;
+}
+
+[[[[ 41  16  28]
+   [244 154 139]
+   [126   0  21]
+   ...
+   [198 103  91]
+   [ 68  26  83]
+   [113 232 108]]
+
+  [[ 36 253 100]
+   [185 117 174]
+   [204 239 127]
+   ...
+   [178 195 244]
+   [ 29  53 197]
+   [ 52 220  90]]
+
+  [[226  99 228]
+   [206  41 120]
+   [ 81 142 212]
+   ...
+   [173   7 165]
+   [243 118 209]
+   [178 201  62]]
+
+  ...
+
+  [[181 245 226]
+   [137 180 141]
+   [140  70  84]
+   ...
+   [104  11 188]
+   [138 175  12]
+   [ 27 236  38]]
+
+  [[ 20 227 193]
+   [124 132 194]
+   [ 92 239 250]
+   ...
+   [ 25 255 208]
+   [ 65 197 119]
+   [ 28  56 121]]
+
+  [[ 27 139  87]
+   [ 69 185   2]
+   [142  82  92]
+   ...
+   [ 69 160 246]
+   [ 47 224  27]
+   [194 157 109]]]]

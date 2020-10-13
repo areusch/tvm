@@ -49,6 +49,11 @@ def test_relay_model():
   with open(mod_path, 'a+') as f:
     f.write(aot)
 
+  print('------------------- Graph -------------------')
+  print(lib.graph_json)
+  print('-------------------- AOT --------------------')
+  print(aot)
+
   compiler = tvm.micro.DefaultCompiler(target)
   opts = tvm.micro.default_options(os.path.join(tvm.micro.CRT_ROOT_DIR, "host"))
   micro_bin = tvm.micro.build_static_runtime(ws, compiler, mod_path, opts['lib_opts'], opts['bin_opts'])

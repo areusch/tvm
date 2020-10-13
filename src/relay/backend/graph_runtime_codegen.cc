@@ -197,25 +197,20 @@ class AotReturnSidVisitor : public ExprVisitor {
     auto iter = storage_device_map_.find(e);
     if (iter != storage_device_map_.end()) {
       return_sid_ = (*iter).second[0][0];
-      LOG(INFO) << "Set Sid" << return_sid_;
     }
   }
 
   void VisitExpr_(const ConstantNode* cn) override {
-    LOG(INFO) << "Visit Const " << AsText(GetRef<Expr>(cn), false, nullptr);
     ExprVisitor::VisitExpr_(cn);
     AssignReturnSid(GetRef<Expr>(cn));
   }
 
   void VisitExpr_(const VarNode* vn) override {
-    LOG(INFO) << "Visit Var " << AsText(GetRef<Expr>(vn), false, nullptr);
     ExprVisitor::VisitExpr_(vn);
     AssignReturnSid(GetRef<Expr>(vn));
   }
 
   void VisitExpr_(const CallNode* cn) override {
-//    LOG(INFO) << "Visit Call: " << GetRef<Expr>(cn);
-    LOG(INFO) << "Visit Call " << AsText(GetRef<Expr>(cn), false, nullptr);
     ExprVisitor::VisitExpr_(cn);
     AssignReturnSid(GetRef<Expr>(cn));
   }
@@ -235,7 +230,6 @@ class AotCodegen {
   void FindReturnSid(Function func, const Map<Expr,Array<IntegerArray>>& storage_device_map) {
     auto visitor = AotReturnSidVisitor(storage_device_map);
     return_sid_ = visitor.FindReturnSid(func);
-    LOG(INFO) << "return sid = " << return_sid_;
   }
 
   void DeclareFunction(std::string func_name) {
@@ -449,7 +443,6 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
       auto& mod = ret.lowered_funcs[kv.first];
       mod->Update(kv.second);
       ret.lowered_funcs.Set(kv.first, mod);
-      LOG(INFO) << "lowered: " << kv.first << ":" << std::endl << mod;
     }
     ret.external_mods = compile_engine_->LowerExternalFunctions();
     aot_.FinishFunction();
