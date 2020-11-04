@@ -21,7 +21,7 @@ import atexit
 import time
 import serial
 import serial.tools.list_ports
-from .base import IoTimeoutError, Transport, TransportTimeouts
+from .base import IoTimeoutError, Transport, TransportClosedError, TransportTimeouts
 
 
 _DEFAULT_SERIAL_TIMEOUTS = TransportTimeouts(
@@ -90,6 +90,9 @@ class SerialTransport(Transport):
         self._port = None
 
     def read(self, n, timeout_sec):
+        if self._port is None:
+            raise TransportClosedError()
+
         end_time = time.monotonic() + timeout_sec
         to_return = bytearray()
         while True:
@@ -116,6 +119,9 @@ class SerialTransport(Transport):
         return to_return
 
     def write(self, data, timeout_sec):
+        if self._port is None:
+            raise TransportClosedError()
+
         self._port.write_timeout = timeout_sec
         try:
             to_return = self._port.write(data)

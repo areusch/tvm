@@ -16,10 +16,14 @@
 # under the License.
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "tlcpack/microtvm-zephyr"
+  config.vm.box = "../../../../../tvm2/apps/microtvm/reference-vm/zephyr/base-box/output-packer-parallels/package.box"
 
   tvm_home = "../../../.."
   dirs_to_mount = [Pathname.new(Pathname.new(tvm_home).expand_path())]
+  if ENV.has_key?("TVM_PROJECT_DIR") then
+    dirs_to_mount.append(ENV["TVM_PROJECT_DIR"])
+    puts "NOTE: also configuring project dir: %s" % [dirs_to_mount[-1]]
+  end
 
   git_file = Pathname.new(tvm_home + "/.git")
   if git_file.ftype() == "file" then
@@ -29,6 +33,8 @@ Vagrant.configure("2") do |config|
       puts "NOTE: also configuring git-worktree gitdir: %s" % [dirs_to_mount[-1]]
     end
   end
+
+  dirs_to_mount.append(Pathname.new("../../../../../stm-nucleo/microtvm-blogpost-eval").expand_path())
 
   config.vm.provision "shell", path: "setup.sh", env: {"TVM_HOME": dirs_to_mount[0]}, privileged: false
 

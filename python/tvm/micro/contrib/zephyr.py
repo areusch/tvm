@@ -55,7 +55,15 @@ class SubprocessEnv(object):
         for k, v in self.default_overrides.items():
             env[k] = v
 
-        return subprocess.check_output(cmd, env=env, **kw)
+        try:
+            to_return = subprocess.check_output(cmd, env=env, **kw)
+            _LOG.debug('ran commmand %s:\nEnv:\n%r\nStdout:\n%s', ' '.join(cmd), env,
+                       str(to_return, 'utf-8', 'ignore'))
+            return to_return
+        except subprocess.CalledProcessError as cpe:
+            _LOG.error('subcommand exited with code %d: %s\nStdout:\n%s',
+                       cpe.returncode, ' '.join(cmd), str(cpe.output, 'utf-8', 'ignore'))
+            raise
 
 
 class FlashRunnerNotSupported(Exception):
@@ -166,6 +174,9 @@ class ZephyrCompiler(tvm.micro.Compiler):
                 target_sources(app PRIVATE)
                 zephyr_library_named({project_name})
                 target_sources({project_name} PRIVATE {sources})
+                get_target_property(tvm_zephyr_include_dirs zephyr_interface INTERFACE_INCLUDE_DIRECTORIES)
+                message(STATUS include dirs! ${{tvm_zephyr_include_dirs}})
+                target_include_directories({project_name} INTERFACE ${{tvm_zephyr_include_dirs}})
                 target_sources(app PRIVATE main.c)
                 target_link_libraries(app PUBLIC {project_name})
                 """

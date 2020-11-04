@@ -23,6 +23,7 @@ import sys
 from ..error import register_error
 from .._ffi import get_global_func
 from ..contrib import graph_runtime
+from ..contrib.debugger import debug_runtime
 from ..rpc import RPCSession
 from .transport import IoTimeoutError
 from .transport import TransportLogger
@@ -124,7 +125,7 @@ class Session:
             self.transport_context_manager = self.flasher.flash(self.binary)
 
         self.transport = TransportLogger(
-            self.session_name, self.transport_context_manager, level=logging.INFO
+            self.session_name, self.transport_context_manager, level=logging.DEBUG
         ).__enter__()
 
         try:
@@ -176,3 +177,32 @@ def create_local_graph_runtime(graph_json_str, mod, ctx):
     device_type_id = [ctx.device_type, ctx.device_id]
     fcreate = get_global_func("tvm.graph_runtime.create")
     return graph_runtime.GraphModule(fcreate(graph_json_str, mod, *device_type_id))
+
+
+def create_local_debug_runtime(graph_json_str, mod, ctx, dump_root=None):
+    """Create a local debug runtime driving execution on the remote CPU context given.
+
+    Parameters
+    ----------
+    graph_json_str : str
+        A string containing the graph representation.
+
+    mod : tvm.runtime.Module
+        The remote module containing functions in graph_json_str.
+
+    ctx : tvm.Context
+        The remote CPU execution context.
+
+    dump_root : Optional[str]
+        If given, passed as dump_root= to GraphModuleDebug.
+
+    Returns
+    -------
+    tvm.contrib.GraphRuntime :
+         A local graph runtime instance that executes on the remote device.
+    """
+    device_type_id = [ctx.device_type, ctx.device_id]
+    fcreate = get_global_func("tvm.graph_runtime_debug.create")
+    return debug_runtime.GraphModuleDebug(
+        fcreate(graph_json_str, mod, *device_type_id),
+        [ctx], graph_json_str, dump_root=dump_root)

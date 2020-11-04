@@ -991,7 +991,13 @@ class RPCClientSession : public RPCSession, public DeviceAPI {
 
   void CopyToRemote(void* from, size_t from_offset, void* to, size_t to_offset, size_t nbytes,
                     TVMContext ctx_to, DLDataType type_hint) final {
-    endpoint_->CopyToRemote(from, from_offset, to, to_offset, nbytes, ctx_to, type_hint);
+    size_t offset = 0;
+    while (nbytes > 0) {
+      size_t to_copy = nbytes > 100 ? 100 : nbytes;
+      endpoint_->CopyToRemote(from, offset, to, offset, to_copy, ctx_to, type_hint);
+      nbytes -= to_copy;
+      offset += to_copy;
+    }
   }
 
   void CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset, size_t nbytes,
