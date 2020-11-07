@@ -18,27 +18,28 @@
  */
 
 /*!
- * Defines functions that generate FuncRegistry structs for C runtime.
- * \file func_registry_generator.h
+ * \file codegen_params.h
  */
-#ifndef TVM_TARGET_FUNC_REGISTRY_GENERATOR_H_
-#define TVM_TARGET_FUNC_REGISTRY_GENERATOR_H_
 
-#include <string>
-#include <vector>
+#ifndef TVM_TARGET_LLVM_CODEGEN_PARAMS_H_
+#define TVM_TARGET_LLVM_CODEGEN_PARAMS_H_
+
+#include "llvm_common.h"
+#include <tvm/runtime/container.h>
+#include <tvm/runtime/ndarray.h>
 
 namespace tvm {
-namespace target {
+namespace codegen {
 
-// Names of pre-defined PackedFunc
-namespace packed_func {
-/*! \brief A PackedFunc that looks up linked parameters by storage_id. */
-constexpr const char* kLookupLinkedParam = "__lookup_linked_param";
-}
+llvm::ConstantArray* NDArrayToLLVMArray(llvm::LLVMContext* ctx, ::tvm::runtime::NDArray arr);
 
-std::string GenerateFuncRegistryNames(const std::vector<std::string>& function_names);
+void LLVMCodeGenParams(llvm::LLVMContext* ctx,
+                       llvm::Module* module,
+                       int64_t storage_id_offset,
+                       ::tvm::runtime::Array<String> param_names,
+                       ::tvm::runtime::Array<runtime::NDArray> params_by_sid);
 
-}  // namespace target
+}  // namespace codegen
 }  // namespace tvm
 
-#endif  // TVM_TARGET_FUNC_REGISTRY_GENERATOR_H_
+#endif // TVM_TARGET_LLVM_CODEGEN_PARAMS_H_

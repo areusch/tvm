@@ -140,8 +140,8 @@ void* MemoryManager_Alloc(MemoryManager* mgr, tvm_index_t size) {
   } else {
     start = ptable->num_pages;
     CHECK_LE((unsigned)(start + npage), ptable->max_pages,
-             "insufficient memory, start=%" PRId32 ", npage=%" PRId32 ", total=%" PRId32 " / %"
-             PRId32,
+             "insufficient memory, start=%" PRId32 ", npage=%" PRId32 ", total=%" PRId32 " / %zu",
+//             PRId32,
              (int32_t)start, (int32_t)npage, (int32_t)(start + npage), mgr->pmap.max_pages);
     /* insert page entry */
     Page p = PageCreate(ptable->memory_pool, ptable->page_size_bytes, start, npage);

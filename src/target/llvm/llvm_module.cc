@@ -32,6 +32,7 @@
 
 #include "../../runtime/file_utils.h"
 #include "../../runtime/library_module.h"
+#include "../func_registry_generator.h"
 #include "codegen_blob.h"
 #include "codegen_llvm.h"
 #include "llvm_common.h"
@@ -199,7 +200,21 @@ class LLVMModuleNode final : public runtime::ModuleNode {
 
     std::vector<PrimFunc> funcs;
     std::string entry_func;
+    Map<String,LinkedParam> linked_params;
+    bool found_linked_params = false;
+    bool could_have_linked_params = target->GetAttr<Bool>("link-params").value_or(Bool(false));
     for (auto kv : mod->functions) {
+      if (could_have_linked_params &&
+          kv.first->name_hint == ::tvm::target::packed_func::kLookupLinkedParam) {
+        std::cout << "lookup linked param" << kv.second;
+        Map<String,ObjectRef> attrs_dict = Downcast<Map<String,ObjectRef>>(kv.second->attrs->dict);
+        CHECK(attrs_dict.find(::tvm::tir::attr::kLinkedParams) != attrs_dict.end())
+          << "no " << ::tvm::tir::attr::kLinkedParams << " attribute found!";
+        linked_params = Downcast<Map<String,LinkedParam>>(
+          attrs_dict[::tvm::tir::attr::kLinkedParams]);
+        found_linked_params = true;
+        continue;
+      }
       ICHECK(kv.second->IsInstance<PrimFuncNode>()) << "Can only lower IR Module with PrimFuncs";
       auto f = Downcast<PrimFunc>(kv.second);
       if (f->HasNonzeroAttr(tir::attr::kIsEntryFunc)) {
@@ -222,6 +237,10 @@ class LLVMModuleNode final : public runtime::ModuleNode {
       cg->AddMainFunction(entry_func);
     }
 
+    if (target->GetAttr<Bool>("link-params").value_or(Bool(false))) {
+      CHECK(found_linked_params) << "--link-params given, but no parameters given to codegen";
+      cg->LinkParameters(linked_params);
+    }
     module_ = cg->Finish();
     module_->addModuleFlag(llvm::Module::Warning, "tvm_target",
                            llvm::MDString::get(*ctx_, LLVMTargetToString(target)));

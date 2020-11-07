@@ -226,6 +226,14 @@ constexpr const char* tvm_global_barrier_state = "__tvm_global_barrier_state";
 constexpr const char* tvm_prepare_global_barrier = "__tvm_prepare_global_barrier";
 /*! \brief Placeholder for the module's entry function. */
 constexpr const char* tvm_module_main = "__tvm_main__";
+/*! \brief Prefix for parameter symbols emitted into the main program. */
+constexpr const char* tvm_param_prefix = "__tvm_param__";
+/*! \brief Prefix for parameter symbols emitted into the main program. */
+constexpr const char* tvm_param_array = "__tvm_param_array";
+/*! \brief The storage_id of tvm_param_array 0th entry. */
+constexpr const char* tvm_param_array_sid_start = "__tvm_param_array_sid_start";
+/*! \brief The storage_id of last tvm_param_array entry, plus 1. */
+constexpr const char* tvm_param_array_sid_end = "__tvm_param_array_sid_end";
 }  // namespace symbol
 
 // implementations of inline functions.

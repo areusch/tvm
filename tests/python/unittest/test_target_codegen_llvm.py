@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import textwrap
 import tvm
 import tvm.testing
 from tvm import te
@@ -747,6 +748,40 @@ def test_llvm_crt_static_lib():
     module.save("test.o")
 
 
+@tvm.testing.requires_llvm
+def test_llvm_link_params():
+    mod = tvm.parser.fromtext(textwrap.dedent("""\
+         #[version = "0.0.5"]
+         def @main(%data : Tensor[(1, 3, 64, 64), uint8], %weight : Tensor[(8, 3, 5, 5), int8]) {
+             %1 = nn.conv2d(
+                  %data,
+                  %weight,
+                  padding=[2, 2],
+                  channels=8,
+                  kernel_size=[5, 5],
+                  data_layout="NCHW",
+                  kernel_layout="OIHW",
+                  out_dtype="int32");
+            %3 = right_shift(%1, 9);
+            %4 = cast(%3, dtype="int8");
+            %4
+         }
+    """))
+    main_func = mod['main']
+    shape_dict = {p.name_hint: p.checked_type.concrete_shape for p in main_func.params}
+    weight_data = np.random.random_integers(-127, 128, shape_dict['weight']).astype("int8")
+    params = {'weight': weight_data}
+
+  #  print(str(mod))
+    target = 'llvm --runtime=c --system-lib --link-params'
+    with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}):
+        lib = tvm.relay.build(mod, target, params=params)
+        print(lib.lib["__lookup_linked_param"](2))
+        # lib.export_library('temp.so')
+        # import os
+        # os.system('objdump -d temp.so')
+
+
 if __name__ == "__main__":
     test_multiple_func()
     test_llvm_large_uintimm()
@@ -771,3 +806,4 @@ if __name__ == "__main__":
     test_llvm_shuffle()
     test_llvm_bf16()
     test_llvm_crt_static_lib()
+    test_llvm_link_params()

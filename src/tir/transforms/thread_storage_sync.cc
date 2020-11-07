@@ -361,6 +361,7 @@ namespace transform {
 
 Pass ThreadSync(String storage_scope) {
   auto pass_func = [storage_scope](PrimFunc f, IRModule m, PassContext ctx) {
+    std::cout << "thread-sync " << f;
     auto* n = f.CopyOnWrite();
     n->body = ThreadSync(std::move(n->body), storage_scope);
     return f;
