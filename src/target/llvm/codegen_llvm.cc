@@ -195,7 +195,7 @@ void CodeGenLLVM::LinkParameters(const Map<String, LinkedParam> params) {
   // args
   param_types.push_back(t_void_->getPointerTo(GetGlobalAddressSpace()));
   // tcodes
-  param_types.push_back(t_void_->getPointerTo(GetGlobalAddressSpace()));
+  param_types.push_back(t_int_->getPointerTo(GetGlobalAddressSpace()));
   // num_args
   param_types.push_back(t_int64_);
   // ret_args
@@ -220,10 +220,10 @@ void CodeGenLLVM::LinkParameters(const Map<String, LinkedParam> params) {
   builder_->SetInsertPoint(entry);
   std::vector<llvm::Value*> zero_index_list{{llvm::ConstantInt::get(t_int32_, 0)}};
   auto args_array = builder_->CreateBitCast(
-    &function->arg_begin()[0], llvm::ArrayType::get(t_void_->getPointerTo(), 1));
+    &function->arg_begin()[0], llvm::ArrayType::get(t_void_->getPointerTo(GetGlobalAddressSpace()), 1));
   llvm::Value* sid =
     builder_->CreateBitCast(
-      builder_->CreateLoad(t_void_->getPointerTo(),
+      builder_->CreateLoad(t_void_->getPointerTo(GetGlobalAddressSpace()),
                            builder_->CreateInBoundsGEP(args_array, zero_index_list)), t_int64_);
     //
 //    builder_->CreateGEP(&function->arg_begin()[0], zero_index_list), t_int64_);
@@ -234,8 +234,12 @@ void CodeGenLLVM::LinkParameters(const Map<String, LinkedParam> params) {
   builder_->SetInsertPoint(default_block);
   builder_->CreateRet(ConstInt32(kTvmErrorGeneratedInvalidStorageId));
 
+  llvm::raw_os_ostream os{std::cout};
+
   for (auto kv : params) {
     auto array = NDArrayToLLVMArray(ctx_, kv.second->param);
+    std::cout << "param " << kv.first << ": ";
+    array->print(os);
     std::string symbol_name = std::string{::tvm::runtime::symbol::tvm_param_prefix} + kv.first;
     llvm::GlobalVariable* param_symbol = new llvm::GlobalVariable(
       *module_, array->getType(), true, llvm::GlobalValue::InternalLinkage,
@@ -247,12 +251,13 @@ void CodeGenLLVM::LinkParameters(const Map<String, LinkedParam> params) {
       case_block);
     builder_->SetInsertPoint(case_block);
     auto retval_array = builder_->CreateBitCast(
-      &function->arg_begin()[3], llvm::ArrayType::get(t_void_->getPointerTo(), 1));
+      &function->arg_begin()[3], llvm::ArrayType::get(t_void_->getPointerTo(GetGlobalAddressSpace()), 1));
     builder_->CreateStore(
-      builder_->CreateBitCast(param_symbol, t_void_->getPointerTo()),
+//      param_symbol,
+      builder_->CreatePointerCast(param_symbol, t_void_->getPointerTo(GetGlobalAddressSpace())),
       builder_->CreateGEP(retval_array, zero_index_list));
     auto ret_types_array = builder_->CreateBitCast(
-      &function->arg_begin()[3], llvm::ArrayType::get(t_int_, 1));
+      &function->arg_begin()[4], llvm::ArrayType::get(t_int_, 1));
     builder_->CreateStore(
       llvm::ConstantInt::get(t_int_, kTVMOpaqueHandle),
       builder_->CreateGEP(ret_types_array, zero_index_list));
@@ -260,7 +265,6 @@ void CodeGenLLVM::LinkParameters(const Map<String, LinkedParam> params) {
   }
 
   std::cout << "generated function: " << std::endl;
-  llvm::raw_os_ostream os{std::cout};
   function->print(os);
 
   // llvm::Value* sid_start = module_->getGlobalVariable(module::tvm_param_array_sid_start);

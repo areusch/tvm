@@ -478,6 +478,9 @@ class RelayBuildModule : public runtime::ModuleNode {
       DictAttrs attrs{dict};
       auto prim = tir::PrimFunc(
         Array<tir::Var>(), tir::SeqStmt(Array<tir::Stmt>()), VoidType(), Map<tir::Var, tir::Buffer>(), attrs);
+      if (lowered_funcs.find(target_host->str()) == lowered_funcs.end()) {
+        lowered_funcs.Set(target_host->str(), IRModule(Map<GlobalVar, BaseFunc>({})));
+      }
       lowered_funcs[target_host->str()]->Add(
         GlobalVar(::tvm::target::packed_func::kLookupLinkedParam), prim);
     }

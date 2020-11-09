@@ -61,9 +61,14 @@ llvm::ConstantArray* NDArrayToLLVMArray(llvm::LLVMContext* ctx, ::tvm::runtime::
     element_type = llvm::Type::getIntNTy(*ctx, arr_type.bits());
 
     if (arr_type.bits() == 8) {
+      int8_t* data_buf = static_cast<int8_t*>(tensor->dl_tensor.data);
       for (int i = 0; i < num_elements; i++) {
-        elements.emplace_back(
-          llvm::ConstantInt::getSigned(element_type, ((int8_t*) tensor->dl_tensor.data)[i]));
+        std::cout << std::hex << +static_cast<std::uint8_t>(data_buf[i]) << std::dec << " ";
+        if (((i + 1) % 16) == 0) {
+          std::cout << std::endl;
+        }
+
+        elements.emplace_back(llvm::ConstantInt::getSigned(element_type, data_buf[i]));
       }
     } else if (arr_type.bits() == 16) {
       for (int i = 0; i < num_elements; i++) {

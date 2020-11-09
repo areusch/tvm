@@ -14,7 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import textwrap
+import collections
+import ctypes
+import json
 import tvm
 import tvm.testing
 from tvm import te
@@ -750,36 +752,114 @@ def test_llvm_crt_static_lib():
 
 @tvm.testing.requires_llvm
 def test_llvm_link_params():
-    mod = tvm.parser.fromtext(textwrap.dedent("""\
-         #[version = "0.0.5"]
-         def @main(%data : Tensor[(1, 3, 64, 64), uint8], %weight : Tensor[(8, 3, 5, 5), int8]) {
-             %1 = nn.conv2d(
-                  %data,
-                  %weight,
-                  padding=[2, 2],
-                  channels=8,
-                  kernel_size=[5, 5],
-                  data_layout="NCHW",
-                  kernel_layout="OIHW",
-                  out_dtype="int32");
-            %3 = right_shift(%1, 9);
-            %4 = cast(%3, dtype="int8");
-            %4
-         }
-    """))
-    main_func = mod['main']
-    shape_dict = {p.name_hint: p.checked_type.concrete_shape for p in main_func.params}
-    weight_data = np.random.random_integers(-127, 128, shape_dict['weight']).astype("int8")
-    params = {'weight': weight_data}
+    linkable_dtypes = (
+        [f'uint{b}' for b in (8, 16, 32, 64)] +
+        [f'int{b}' for b in (8, 16, 32, 64)] +
+        ['float32', 'float64'])
 
-  #  print(str(mod))
-    target = 'llvm --runtime=c --system-lib --link-params'
-    with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}):
-        lib = tvm.relay.build(mod, target, params=params)
-        print(lib.lib["__lookup_linked_param"](2))
-        # lib.export_library('temp.so')
-        # import os
-        # os.system('objdump -d temp.so')
+    linkable_dtypes = linkable_dtypes[:1]
+
+    def dtype_info(dtype):
+        if 'int' in dtype:
+            return np.iinfo(getattr(np, dtype))
+        else:
+            return np.finfo(getattr(np, dtype))
+
+    for dtype in linkable_dtypes:
+        param_decls = collections.OrderedDict()
+        param_init = {}
+        shape = (3, 4, 5)
+
+        def _build_random_tensor(name, dtype):
+            dinfo = dtype_info(dtype)
+            if 'int' in dtype:
+                return np.random.random_integers(dinfo.min, dinfo.max, shape).astype(dtype)
+            else:
+                param_init[name] = dinfo.min + (np.random.random(shape) * dtype.max) * (
+                    [-1, 1] * (np.prod(shape) / 2))
+
+        def _add_decl(name, dtype):
+            param_decls[name] = f'%{name} : Tensor[{shape}, {dtype}]'
+            param_init[name] = _build_random_tensor(name, dtype)
+
+        _add_decl(f'{dtype}_a', dtype)
+        _add_decl(f'{dtype}_b', dtype)
+
+        mod_lines = [
+            '#[version = "0.0.5"]',
+            f"def @main(%rand_input : Tensor[{shape}, {dtype}], { ', '.join(param_decls.values()) } )  {{",
+            f'    %0 = bitwise_xor(%rand_input, bitwise_xor(%{dtype}_a, %{dtype}_b));',
+            '    %0',
+            '}'
+        ]
+
+        mod = tvm.parser.fromtext('\n'.join(mod_lines))
+        print('mod', mod)
+
+        def _lookup_sid(graph, name):
+            num_outputs_seen = 0
+            for i, n in enumerate(graph['nodes']):
+                if n['name'] == name:
+                    return graph['attrs']['storage_id'][1][num_outputs_seen]
+                else:
+                    if 'attrs' in n and 'num_outputs' in n['attrs']:
+                        num_outputs_seen += n['attrs']['num_outputs']
+                    else:
+                        num_outputs_seen += 1
+
+            raise KeyError(f'no such param: {name}')
+
+        def _verify_linked_param(lib, graph, name):
+            sid = _lookup_sid(graph, name)
+            param_ptr = lib.lib["__lookup_linked_param"](sid)
+            arr_data = (ctypes.c_int8 * np.prod(shape)).from_address(param_ptr.value)
+            gen_param = lib.params[name]
+            arr = np.ndarray(
+                shape=gen_param.shape, dtype=gen_param.dtype, buffer=arr_data, order='C')
+            if 'int' in gen_param.dtype:
+                np.testing.assert_equal(gen_param.asnumpy(), arr)
+            else:
+                np.testing.assert_allclose(gen_param.asnumpy(), arr)
+
+        rand_input = _build_random_tensor('rand_input', dtype)
+
+        main_func = mod['main']
+        target = 'llvm --runtime=c --system-lib --link-params'
+        with tvm.transform.PassContext(opt_level=3):
+            lib = tvm.relay.build(mod, target, params=param_init)
+            print('graph', lib.graph_json)
+            assert set(lib.params.keys()) == {"p0"}  # NOTE: op folded
+
+            graph = json.loads(lib.graph_json)
+            for p in lib.params:
+                _verify_linked_param(lib, graph, p)
+
+            # Wrap in function to explicitly deallocate the runtime.
+            def _run_linked(lib):
+                graph_json, mod, _ = lib
+                graph_rt = tvm.contrib.graph_runtime.create(graph_json, mod, tvm.cpu(0))
+                graph_rt.set_input('rand_input', rand_input) # NOTE: params not required.
+                graph_rt.run()
+                return graph_rt.get_output(0)
+
+            linked_output = _run_linked(lib)
+
+        with tvm.transform.PassContext(opt_level=3):
+            lib = tvm.relay.build(mod, 'llvm --runtime=c --system-lib', params=param_init)
+
+            def _run_unlinked(lib):
+                graph_json, mod, lowered_params = lib
+                graph_rt = tvm.contrib.graph_runtime.create(graph_json, mod, tvm.cpu(0))
+                graph_rt.set_input('rand_input', rand_input, **lowered_params)
+                graph_rt.run()
+                return graph_rt.get_output(0)
+
+            unlinked_output = _run_unlinked(lib)
+
+        if 'int' in dtype:
+            np.testing.assert_equal(unlinked_output.asnumpy(), linked_output.asnumpy())
+        else:
+            np.testing.assert_allclose(unlinked_output.asnumpy(), linked_output.asnumpy())
 
 
 if __name__ == "__main__":

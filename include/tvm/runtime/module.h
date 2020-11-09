@@ -228,12 +228,8 @@ constexpr const char* tvm_prepare_global_barrier = "__tvm_prepare_global_barrier
 constexpr const char* tvm_module_main = "__tvm_main__";
 /*! \brief Prefix for parameter symbols emitted into the main program. */
 constexpr const char* tvm_param_prefix = "__tvm_param__";
-/*! \brief Prefix for parameter symbols emitted into the main program. */
-constexpr const char* tvm_param_array = "__tvm_param_array";
-/*! \brief The storage_id of tvm_param_array 0th entry. */
-constexpr const char* tvm_param_array_sid_start = "__tvm_param_array_sid_start";
-/*! \brief The storage_id of last tvm_param_array entry, plus 1. */
-constexpr const char* tvm_param_array_sid_end = "__tvm_param_array_sid_end";
+/*! \brief A PackedFunc that looks up linked parameters by storage_id. */
+constexpr const char* tvm_lookup_linked_param = "__lookup_linked_param";
 }  // namespace symbol
 
 // implementations of inline functions.

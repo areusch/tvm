@@ -30,12 +30,6 @@
 namespace tvm {
 namespace target {
 
-// Names of pre-defined PackedFunc
-namespace packed_func {
-/*! \brief A PackedFunc that looks up linked parameters by storage_id. */
-constexpr const char* kLookupLinkedParam = "__lookup_linked_param";
-}
-
 std::string GenerateFuncRegistryNames(const std::vector<std::string>& function_names);
 
 }  // namespace target
