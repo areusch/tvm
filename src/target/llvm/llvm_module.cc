@@ -205,8 +205,7 @@ class LLVMModuleNode final : public runtime::ModuleNode {
     bool could_have_linked_params = target->GetAttr<Bool>("link-params").value_or(Bool(false));
     for (auto kv : mod->functions) {
       if (could_have_linked_params &&
-          kv.first->name_hint == ::tvm::target::packed_func::kLookupLinkedParam) {
-        std::cout << "lookup linked param" << kv.second;
+          kv.first->name_hint == ::tvm::runtime::symbol::tvm_lookup_linked_param) {
         Map<String,ObjectRef> attrs_dict = Downcast<Map<String,ObjectRef>>(kv.second->attrs->dict);
         CHECK(attrs_dict.find(::tvm::tir::attr::kLinkedParams) != attrs_dict.end())
           << "no " << ::tvm::tir::attr::kLinkedParams << " attribute found!";
@@ -224,8 +223,7 @@ class LLVMModuleNode final : public runtime::ModuleNode {
       }
       funcs.push_back(f);
     }
-    bool is_link_params = target->GetAttr<Bool>("link-params").value_or(Bool(false));
-    ICHECK(funcs.size() > 0 || is_link_params);
+    ICHECK(funcs.size() > 0 || (could_have_linked_params && found_linked_params));
     // TODO(tqchen): remove the entry function behavior as it does not
     // makes sense when we start to use multiple modules.
     cg->Init("TVMMod", tm_.get(), ctx_.get(), system_lib, system_lib, target_c_runtime);
@@ -238,8 +236,7 @@ class LLVMModuleNode final : public runtime::ModuleNode {
       cg->AddMainFunction(entry_func);
     }
 
-    if (is_link_params) {
-      CHECK(found_linked_params) << "--link-params given, but no parameters given to codegen";
+    if (found_linked_params) {
       cg->LinkParameters(linked_params);
     }
     module_ = cg->Finish();

@@ -33,11 +33,14 @@ namespace codegen {
 
 llvm::ConstantArray* NDArrayToLLVMArray(llvm::LLVMContext* ctx, ::tvm::runtime::NDArray arr);
 
+void NDArrayDataToC(::tvm::runtime::NDArray arr, int indent_chars, std::ostream& os);
+
 void LLVMCodeGenParams(llvm::LLVMContext* ctx,
                        llvm::Module* module,
                        int64_t storage_id_offset,
                        ::tvm::runtime::Array<String> param_names,
                        ::tvm::runtime::Array<runtime::NDArray> params_by_sid);
+
 
 }  // namespace codegen
 }  // namespace tvm
