@@ -5,6 +5,7 @@ import numpy as np
 import tvm
 import tvm.micro
 import tvm.relay
+import tvm.relay.backend
 import tvm.relay.testing
 
 #/    %0 = cast(cast(%data, int16) - cast(%mean_data, int16), int8);
@@ -41,7 +42,11 @@ def test_relay_model():
 #  print(str(mod))
   target = 'c -mcpu=native --runtime=c --system-lib'
   with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}):
+    lib = tvm.relay.backend.compile_engine.get().lower(mod['main'], target)
+    print('lib', lib.funcs)
+    print('optimize', tvm.relay.optimize(mod, target, params=params)[0].astext(show_meta_data=False))
     lib, aot = tvm.relay.build(mod, target, params=params)
+    print('csource', lib.lib.get_source())
 
   ws = tvm.micro.Workspace(debug=True)
   mod_path = f'{ws.path}/lib.c'
