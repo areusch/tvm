@@ -34,19 +34,19 @@ namespace runtime {
 class RPCDeviceAPI final : public DeviceAPI {
  public:
   void SetDevice(TVMContext ctx) final {
-    auto remote_ctx = RemoveSessMask(ctx);
+    auto remote_ctx = RemoveRPCSessionMask(ctx);
     GetSess(ctx)->GetDeviceAPI(remote_ctx)->SetDevice(remote_ctx);
   }
 
   void GetAttr(TVMContext ctx, DeviceAttrKind kind, TVMRetValue* rv) final {
-    auto remote_ctx = RemoveSessMask(ctx);
+    auto remote_ctx = RemoveRPCSessionMask(ctx);
     GetSess(ctx)->GetDeviceAPI(remote_ctx)->GetAttr(remote_ctx, kind, rv);
   }
 
   void* AllocDataSpace(TVMContext ctx, size_t nbytes, size_t alignment,
                        DLDataType type_hint) final {
     auto sess = GetSess(ctx);
-    auto remote_ctx = RemoveSessMask(ctx);
+    auto remote_ctx = RemoveRPCSessionMask(ctx);
     void* data =
         sess->GetDeviceAPI(remote_ctx)->AllocDataSpace(remote_ctx, nbytes, alignment, type_hint);
 
@@ -57,7 +57,7 @@ class RPCDeviceAPI final : public DeviceAPI {
   }
   void FreeDataSpace(TVMContext ctx, void* ptr) final {
     RemoteSpace* space = static_cast<RemoteSpace*>(ptr);
-    auto remote_ctx = RemoveSessMask(ctx);
+    auto remote_ctx = RemoveRPCSessionMask(ctx);
     try {
       GetSess(ctx)->GetDeviceAPI(remote_ctx)->FreeDataSpace(remote_ctx, space->data);
     } catch (const dmlc::Error& e) {
@@ -80,7 +80,7 @@ class RPCDeviceAPI final : public DeviceAPI {
           ->CopyDataFromTo(static_cast<const RemoteSpace*>(from)->data, from_offset,
                            static_cast<const RemoteSpace*>(to)->data, to_offset, size,
                            remote_ctx_from, remote_ctx_to, type_hint, stream);
-    } else if (IsRPCSessionContext(from_ctx) && ctx_to.device_type == kDLCPU) {
+    } else if (IsRPCSessionContext(ctx_from) && ctx_to.device_type == kDLCPU) {
       auto remote_ctx_from = RemoveRPCSessionMask(ctx_from);
       GetSess(ctx_from)->CopyFromRemote(static_cast<const RemoteSpace*>(from)->data, from_offset,
                                         to, to_offset, size, remote_ctx_from, type_hint);
