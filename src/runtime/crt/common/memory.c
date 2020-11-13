@@ -38,6 +38,8 @@
 #include <tvm/runtime/crt/memory.h>
 #include <tvm/runtime/crt/platform.h>
 
+#define TVM_CRT_DEBUG 2
+
 // construct a new page
 Page PageCreate(uint8_t* memory_pool, size_t page_size_bytes, tvm_index_t ptable_begin,
                 tvm_index_t num_pages) {
@@ -140,8 +142,8 @@ void* MemoryManager_Alloc(MemoryManager* mgr, tvm_index_t size) {
   } else {
     start = ptable->num_pages;
     CHECK_LE((unsigned)(start + npage), ptable->max_pages,
-             "insufficient memory, start=%" PRId32 ", npage=%" PRId32 ", total=%" PRId32 " / %zu",
-//             PRId32,
+             "insufficient memory, start=%" PRId32 ", npage=%" PRId32 ", total=%" PRId32 " / %" //zu",
+             PRId32,
              (int32_t)start, (int32_t)npage, (int32_t)(start + npage), mgr->pmap.max_pages);
     /* insert page entry */
     Page p = PageCreate(ptable->memory_pool, ptable->page_size_bytes, start, npage);
@@ -152,8 +154,8 @@ void* MemoryManager_Alloc(MemoryManager* mgr, tvm_index_t size) {
   }
   vleak_size++;
 #if TVM_CRT_DEBUG > 1
-  printf("allocate: addr=%p, start=%" PRId64 "/%zu, npage=%" PRId64 ", vleak=%d\n", data, start,
-         ptable->max_pages, npage, vleak_size);
+  TVMLogf("allocate: addr=%p, start=%" PRId32 "/%" PRId32 ", npage=%" PRId32 ", vleak=%d\n", data, start,
+          ptable->max_pages, npage, vleak_size);
 #endif  // TVM_CRT_DEBUG
   return data;
 }
@@ -230,9 +232,9 @@ void* MemoryManager_Realloc(MemoryManager* mgr, void* ptr, tvm_index_t size) {
     vleak_size++;
   }
 #if TVM_CRT_DEBUG > 1
-  printf("reallocate: addr=%p, start=%" PRId64 "/%zu, npage=%" PRId64 ", vleak=%d, size=%" PRId64
-         "\n",
-         data, start, mgr->ptable.max_pages, npage, vleak_size, size);
+  TVMLogf("reallocate: addr=%p, start=%" PRId64 "/%" PRId32 ", npage=%" PRId64 ", vleak=%d, size=%" PRId64
+          "\n",
+          data, start, mgr->ptable.max_pages, npage, vleak_size, size);
 #endif  // TVM_CRT_DEBUG
   return data;
 }
@@ -252,8 +254,8 @@ void MemoryManager_Free(MemoryManager* mgr, void* ptr) {
   free_map->insert(free_map, p->num_pages, p);
   vleak_size--;
 #if TVM_CRT_DEBUG > 1
-  printf("release: addr=%p, start=%" PRId64 "/%zu, npage=%" PRId64 ", vleak=%d\n", ptr,
-         entry->page.ptable_begin, mgr->ptable.max_pages, entry->page.num_pages, vleak_size);
+  TVMLogf("release: addr=%p, start=%" PRId64 "/%" PRId32 ", npage=%" PRId64 ", vleak=%d\n", ptr,
+          entry->page.ptable_begin, mgr->ptable.max_pages, entry->page.num_pages, vleak_size);
 #endif  // TVM_CRT_DEBUG
 }
 
