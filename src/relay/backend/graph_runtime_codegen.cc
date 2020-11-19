@@ -300,15 +300,15 @@ class AotCodegen {
     CHECK(sids.size() == 2 && sids[0].size() == 1) << "don't know what to do in this case";
     if (uint64_t(sids[0][0]) == return_sid_) {
       // NOTE: each function is presumed to have 1 return value.
-      values->emplace_back((std::stringstream() << "values[" << return_value_index << "]").str());
-      tcodes->emplace_back((std::stringstream() << "tcodes[" << return_value_index << "]").str());
+      values->emplace_back((std::ostringstream() << "values[" << return_value_index << "]").str());
+      tcodes->emplace_back((std::ostringstream() << "tcodes[" << return_value_index << "]").str());
       return;
     }
 
     auto checked_type = exp->checked_type();
     const auto* tensor_type = checked_type.as<TensorTypeNode>();
     CHECK(tensor_type != nullptr) << "cannot convert expr " << exp << " to tensor";
-    std::string sid_name = (std::stringstream() << "sid_" << sids[0][0]).str();
+    std::string sid_name = (std::ostringstream() << "sid_" << sids[0][0]).str();
     std::string sid_tensor_name = sid_name + "_tensor";
     WriteDLTensor(ss_, "", sid_tensor_name, 8, _ShapeToJSON(tensor_type->shape), sid_name);
     values->emplace_back(std::string{"{.v_handle = &"} + sid_tensor_name + "}");
@@ -325,11 +325,11 @@ class AotCodegen {
       auto input_iter = std::find(inputs_.begin(), inputs_.end(), arg);
       if (input_iter != inputs_.end()) {
         int index = std::distance(inputs_.begin(), input_iter);
-        values.emplace_back((std::stringstream() << "values[" << index << "]").str());
-        tcodes.emplace_back((std::stringstream() << "tcodes[" << index << "]").str());
+        values.emplace_back((std::ostringstream() << "values[" << index << "]").str());
+        tcodes.emplace_back((std::ostringstream() << "tcodes[" << index << "]").str());
       } else if (params_.find(arg) != params_.end()) {
         auto value = params_[arg];
-        values.emplace_back((std::stringstream() << "&" << value.first << "_param").str());
+        values.emplace_back((std::ostringstream() << "&" << value.first << "_param").str());
         tcodes.emplace_back("kTVMDLTensorHandle");
       } else {
         Array<IntegerArray> sids = storage_device_map[arg];
@@ -395,8 +395,8 @@ class AotCodegen {
     return ret;
   }
 
-  std::stringstream param_decl_;
-  std::stringstream ss_;
+  std::ostringstream param_decl_;
+  std::ostringstream ss_;
   std::vector<Expr> inputs_;
   std::map<Expr, std::pair<std::string, runtime::NDArray>> params_;
   int64_t return_sid_;
