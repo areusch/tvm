@@ -32,6 +32,9 @@ A quick solution is to install protobuf compiler, and
 or please refer to offical site.
 https://github.com/onnx/onnx
 """
+#
+# sphinx_gallery_thumbnail_path = '_static/img/logo/onnx.svg'
+#
 import onnx
 import numpy as np
 import tvm

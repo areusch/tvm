@@ -37,21 +37,31 @@ For Developers
 
 .. toctree::
    :maxdepth: 1
-   :caption: How to
+   :caption: Getting Started
    :hidden:
 
    install/index
-   contribute/index
-   deploy/index
-   dev/how_to
 
 .. toctree::
-   :maxdepth: 1
-   :caption: Tutorials
+   :maxdepth: 3
+   :caption: Dive Into
    :hidden:
 
-   tutorials/index
+   import_models/index
+   describe_models/index
+   optimize/index
+   deploy/index
+   microtvm/index
+   vta/index
+   dev/how_to
+   contribute/index
 
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+   :caption: Design Documents
+
+   dev/index
 
 .. toctree::
    :maxdepth: 2
@@ -65,16 +75,8 @@ For Developers
 .. toctree::
    :maxdepth: 2
    :hidden:
-   :caption: Deep Dive
-
-   dev/index
-
-.. toctree::
-   :maxdepth: 2
-   :hidden:
    :caption: MISC
 
-   vta/index
    faq
 
 

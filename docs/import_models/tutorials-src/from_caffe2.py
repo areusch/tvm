@@ -14,6 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+#
+# sphinx_gallery_thumbnail_path = "_static/caffe2.svg"
 """
 Compile Caffe2 Models
 =====================

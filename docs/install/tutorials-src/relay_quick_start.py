@@ -106,7 +106,7 @@ with tvm.transform.PassContext(opt_level=opt_level):
 # Now we can create graph runtime and run the module on Nvidia GPU.
 
 # create random input
-ctx = tvm.gpu()
+ctx = tvm.cpu()
 data = np.random.uniform(-1, 1, size=data_shape).astype("float32")
 # create module
 module = graph_runtime.GraphModule(lib["default"](ctx))

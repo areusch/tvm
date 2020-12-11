@@ -15,30 +15,16 @@
     specific language governing permissions and limitations
     under the License.
 
-.. _installation:
+.. _describe_models:
 
-Installation
-============
-To install TVM, please read :ref:`install-from-source`.
-If you are interested in deploying to mobile/embedded devices,
-you do not need to install the entire TVM stack on your device,
-instead, you only need the runtime, please read :ref:`deploy-and-integration`.
-If you would like to quickly try out TVM or do demo/tutorials, checkout :ref:`docker-images`
+Describe Models to TVM
+==============
+
+There are several ways to describe models to TVM. Insert a graphic explaining the differences.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
-   from_source
-   docker
-
-First Steps with TVM
-=================
-
-In its current form, TVM is a Python library that helps you compile, optimize, and deploy models.
-It also contains a rudimentary command line driver. The tutorials below explain how to interact
-with TVM.
-
-.. toctree::
-   :maxdepth: 2
-
-   tutorials/index
+   relay/index
+   tensor_expression/index
+   tir/index

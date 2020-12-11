@@ -15,30 +15,25 @@
     specific language governing permissions and limitations
     under the License.
 
-.. _installation:
+.. _tensor_expression:
 
-Installation
-============
-To install TVM, please read :ref:`install-from-source`.
-If you are interested in deploying to mobile/embedded devices,
-you do not need to install the entire TVM stack on your device,
-instead, you only need the runtime, please read :ref:`deploy-and-integration`.
-If you would like to quickly try out TVM or do demo/tutorials, checkout :ref:`docker-images`
+Tensor Expression Language
+==========================
 
-.. toctree::
-   :maxdepth: 2
+Initially, TVM represents models in an Intermediate Representation called **Tensor Expression**.
+Models must be lowered to Tensor Expression describes a computation without specifying how it's
+accomplished.
 
-   from_source
-   docker
+The Compute Function
+~~~~~~~~~~~~~~~~~~~~~
 
-First Steps with TVM
-=================
+Tensor Expression operators split the definition of a model into two pieces:
+* **Compute Function**: describes the computation, element-wise, typically as a Python lambda
+  function.
+* **Schedule**: describes *how to perform* the computation, including loop structure, strides,
+  unrolling and any acceleration performed by intrinsics using tensorization or vectorization.
 
-In its current form, TVM is a Python library that helps you compile, optimize, and deploy models.
-It also contains a rudimentary command line driver. The tutorials below explain how to interact
-with TVM.
+These tutorials
 
 .. toctree::
-   :maxdepth: 2
-
-   tutorials/index
+.. include:: ./tutorials/index.rst

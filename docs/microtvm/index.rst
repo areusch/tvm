@@ -15,30 +15,22 @@
     specific language governing permissions and limitations
     under the License.
 
-.. _installation:
+.. _microtvm_landing_page:
 
-Installation
+microTVM
 ============
-To install TVM, please read :ref:`install-from-source`.
-If you are interested in deploying to mobile/embedded devices,
-you do not need to install the entire TVM stack on your device,
-instead, you only need the runtime, please read :ref:`deploy-and-integration`.
-If you would like to quickly try out TVM or do demo/tutorials, checkout :ref:`docker-images`
 
-.. toctree::
-   :maxdepth: 2
+microTVM (also, uTVM or µTVM) allows TVM to run models on bare-metal (i.e. IoT) devices. microTVM
+can translate any model imported into TVM into C99-compliant C source code; or, for LLVM-supported
+targets, microTVM can generate machine code directly. microTVM has no dependencies outside the
+standard C library.
 
-   from_source
-   docker
 
-First Steps with TVM
-=================
+Getting Started
+~~~~~~~~~~~~~~
 
-In its current form, TVM is a Python library that helps you compile, optimize, and deploy models.
-It also contains a rudimentary command line driver. The tutorials below explain how to interact
-with TVM.
 
-.. toctree::
-   :maxdepth: 2
+Tutorials
+~~~~~~~~
 
-   tutorials/index
+.. include:: ./tutorials/index.rst

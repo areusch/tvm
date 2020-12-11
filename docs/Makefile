@@ -63,7 +63,7 @@ help:
 clean:
 	rm -rf $(BUILDDIR)/*
 	rm -rf gen_modules
-	rm -rf tutorials
+	find . -name tutorials -type d -delete
 	rm -rf vta/tutorials
 
 html:
