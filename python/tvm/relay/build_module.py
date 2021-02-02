@@ -77,7 +77,7 @@ class BuildModule(object):
 
     def __init__(self):
         self.mod = _build_module._BuildModule()
-        self._get_graph_json = self.mod["get_graph_json"]
+        self._get_graph = self.mod["get_graph"]
         self._get_module = self.mod["get_module"]
         self._build = self.mod["build"]
         self._optimize = self.mod["optimize"]
@@ -137,11 +137,11 @@ class BuildModule(object):
         autotvm.GLOBAL_SCOPE.silent = old_autotvm_silent
 
         # Get artifacts
-        graph_json = self.get_json()
+        graph = self.get_graph()
         mod = self.get_module()
         params = self.get_params()
 
-        return graph_json, mod, params
+        return graph, mod, params
 
     def optimize(self, mod, target=None, params=None):
         """
@@ -181,9 +181,9 @@ class BuildModule(object):
     def _set_params(self, params):
         self._set_params_func(_convert_param_map(params))
 
-    def get_json(self):
+    def get_graph(self):
         """Return the json file of the built program."""
-        return self._get_graph_json()
+        return self._get_graph()
 
     def get_module(self):
         """Return the built module."""
@@ -245,8 +245,10 @@ def build(ir_mod, target=None, target_host=None, params=None, mod_name="default"
 
     Returns
     -------
-    graph_json : str
-        The json string that can be accepted by graph executor.
+    graph : str
+        The string representation of the graph. When using the 
+        graph-executor this is represents json string that can be 
+        accepted by the executor.
 
     mod : tvm.Module
         The module containing necessary libraries.
@@ -287,7 +289,8 @@ def build(ir_mod, target=None, target_host=None, params=None, mod_name="default"
 
     with tophub_context:
         bld_mod = BuildModule()
-        graph_json, runtime_mod, params = bld_mod.build(mod=ir_mod, target=target, params=params)
+
+        graph, runtime_mod, params = bld_mod.build(mod=ir_mod, target=target, params=params)
         executor_factory = _graph_executor_factory.GraphExecutorFactoryModule(
             ir_mod, target, graph_json, runtime_mod, mod_name, params
         )

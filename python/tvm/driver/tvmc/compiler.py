@@ -239,7 +239,7 @@ def compile_model(
 
     # TODO we need to update this return to use the updated graph module APIs
     #      as these getter functions will be deprecated in the next release (@leandron)
-    return graph_module.get_json(), graph_module.get_lib(), graph_module.get_params(), dumps
+    return graph_module.get_graph(), graph_module.get_lib(), graph_module.get_params(), dumps
 
 
 def save_module(module_path, graph, lib, params, cross=None):
