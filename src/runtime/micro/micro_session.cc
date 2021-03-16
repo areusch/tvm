@@ -26,6 +26,7 @@
 #include <tvm/runtime/crt/rpc_common/framing.h>
 #include <tvm/runtime/crt/rpc_common/session.h>
 #include <tvm/runtime/crt/rpc_common/error_module.h>
+#include <tvm/runtime/crt/error_codes.h>
 #include <tvm/runtime/registry.h>
 #include <tvm/support/logging.h>
 
@@ -355,17 +356,20 @@ class MicroTransportChannel : public RPCChannel {
         if (message_size_bytes > 0) {
           ICHECK_EQ(buf->Read(message, sizeof(message) - 1), message_size_bytes);
           session_.ClearReceiveBuffer();
-          if (message[0] == kErrorModuleMagicNumber && message[3] == kErrorModuleMagicNumber) {
-            ErrorModule received_error = ErrorModule((ErrorSource)message[1], (ErrorReason)message[2]);
+          if (message[0] == kErrorModuleMagicNumber && message[4] == kErrorModuleMagicNumber) {
+            uint16_t reason = (message[2] << 8) + message[3];
+            ErrorModule received_error = ErrorModule((error_source_t)message[1], reason);
 
+            std::string category = std::to_string(message[2]);
+            std::string code = std::to_string(message[3]);
             switch (received_error.GetErrorSource()) {
-              case ErrorSource::kTVMPlatform:
-                LOG(ERROR) << "microTVM error: source TVM platform. Error reason: "
-                  << (char)received_error.GetErrorReason();
+              case error_source_t::kTVMPlatform:
+                LOG(ERROR) << "microTVM error: source => TVM platform: reason=> category:"
+                  << category << "\tcode=> " << code;
                 break;
-              case ErrorSource::kZephyr:
-                LOG(ERROR) << "microTVM error: source Zephyr. Error reason: "
-                  << (char)received_error.GetErrorReason();
+              case error_source_t::kZephyr:
+                LOG(ERROR) << "microTVM error: source => Zephyr: reason=> category:"
+                  << category << "\tcode=> " << code;
                 break;
             }
           }

@@ -305,23 +305,24 @@ void UtvmErrorModuleClear(utvm_rpc_server_error_module_t error_ptr) {
 }
 
 void UtvmErrorModuleSetError(utvm_rpc_server_error_module_t error_ptr, 
-  uint8_t source, uint8_t reason) {
+  error_source_t source, uint16_t reason) {
   tvm::runtime::micro_rpc::ErrorModule* error_module =
     static_cast<tvm::runtime::micro_rpc::ErrorModule*>(error_ptr);
-  error_module->SetError((tvm::runtime::micro_rpc::ErrorSource) source, 
-    (tvm::runtime::micro_rpc::ErrorReason) reason);
+  error_module->SetError(source, reason);
 }
 
 void UtvmErrorReport(utvm_rpc_server_error_module_t error_ptr) {
   tvm::runtime::micro_rpc::ErrorModule* error_module =
     static_cast<tvm::runtime::micro_rpc::ErrorModule*>(error_ptr);
-  char message_buffer[4];
+  uint8_t message_buffer[5];
   size_t num_bytes = 0;
-  message_buffer[0] = (char)tvm::runtime::micro_rpc::kErrorModuleMagicNumber;
-  message_buffer[1] = (char)error_module->GetErrorSource();
-  message_buffer[2] = (char)error_module->GetErrorReason();
-  message_buffer[3] = (char)tvm::runtime::micro_rpc::kErrorModuleMagicNumber;
-  num_bytes += 4;
+  message_buffer[0] = tvm::runtime::micro_rpc::kErrorModuleMagicNumber;
+  message_buffer[1] = error_module->GetErrorSource();
+  uint16_t reason = error_module->GetErrorReason();
+  message_buffer[2] = static_cast<uint8_t>((reason & 0xFF00) >> 8);
+  message_buffer[3] = static_cast<uint8_t>(reason & 0x00FF);
+  message_buffer[4] = tvm::runtime::micro_rpc::kErrorModuleMagicNumber;
+  num_bytes += 5;
 
   if (g_rpc_server != nullptr) {
     static_cast<tvm::runtime::micro_rpc::MicroRPCServer*>(g_rpc_server)
@@ -331,9 +332,8 @@ void UtvmErrorReport(utvm_rpc_server_error_module_t error_ptr) {
     tvm::runtime::micro_rpc::SerialWriteStream write_stream;
     tvm::runtime::micro_rpc::Framer framer{&write_stream};
     tvm::runtime::micro_rpc::Session session{&framer, nullptr, nullptr, nullptr};
-    tvm_crt_error_t err =
-        session.SendMessage(tvm::runtime::micro_rpc::MessageType::kNormal,
-                            reinterpret_cast<uint8_t*>(message_buffer), num_bytes);
+    session.SendMessage(tvm::runtime::micro_rpc::MessageType::kNormal,
+                        reinterpret_cast<uint8_t*>(message_buffer), num_bytes);
   }
 }
 

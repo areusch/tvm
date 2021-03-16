@@ -25,6 +25,8 @@
 #ifndef TVM_RUNTIME_CRT_RPC_COMMON_ERROR_MODULE_H_
 #define TVM_RUNTIME_CRT_RPC_COMMON_ERROR_MODULE_H_
 
+#include <tvm/runtime/crt/error_codes.h>
+
 #include <inttypes.h>
 #include <sys/types.h>
 
@@ -34,38 +36,34 @@ namespace micro_rpc {
 
 const uint8_t kErrorModuleMagicNumber = 0xAA;
 
-enum class ErrorSource : uint8_t {
-  kTVMPlatform = 0x00,
-  kZephyr = 0x01,
-};
-
-enum class ErrorReason : uint8_t {
-  kReset = 0x00,
-};
+// enum class ErrorSource : uint8_t {
+//   kTVMPlatform = 0x00,
+//   kZephyr = 0x01,
+// };
 
 class ErrorModule {
   public:
-    ErrorModule(ErrorSource source, ErrorReason reason)
+    ErrorModule(error_source_t source, uint16_t reason)
       : source_{source}, reason_{reason}, is_valid_{true} {}
 
     ErrorModule()
-      : source_{(ErrorSource)0x00}, reason_{(ErrorReason)0x00}, 
+      : source_{(error_source_t)0x0}, reason_{0x0}, 
       is_valid_{false} {}
 
     void* operator new(size_t count, void* ptr) { return ptr; }
 
     bool isValid();
-    void SetError(ErrorSource source, ErrorReason reason);
-    ErrorSource GetErrorSource();
-    ErrorReason GetErrorReason();
+    void SetError(error_source_t source, uint16_t reason);
+    error_source_t GetErrorSource();
+    uint16_t GetErrorReason();
     void Clear();
 
   private:
     /*! \brief reset source. */
-    ErrorSource source_;
+    error_source_t source_;
 
     /*! \brief reset reason. */
-    ErrorReason reason_;
+    uint16_t reason_;
 
     /*! \brief crc. */
     bool is_valid_;

@@ -297,7 +297,6 @@ void main(void) {
   //Initialize microTVM RPC server Error Module
   g_error_module = UtvmRpcServerErrorModuleInit();
   TVMLogf("microTVM Zephyr runtime - running");
-  UtvmErrorModuleSetError(g_error_module, 0x00, 0x00);
   
 #ifdef CONFIG_LED
   gpio_pin_set(led0_pin, LED0_PIN, 0);
@@ -315,10 +314,12 @@ void main(void) {
         // Pass the received bytes to the RPC server.
         tvm_crt_error_t err = UTvmRpcServerLoop(server, &cursor, &bytes_remaining);
         if (err != kTvmErrorNoError && err != kTvmErrorFramingShortPacket) {
+          UtvmErrorModuleSetError(g_error_module, kTVMPlatform, (uint16_t)err);
           TVMPlatformAbort(err);
         }
         if (g_num_bytes_written != 0 || g_num_bytes_requested != 0) {
           if (g_num_bytes_written != g_num_bytes_requested) {
+            //TODO: figure out this number
             TVMPlatformAbort((tvm_crt_error_t)0xbeef5);
           }
           g_num_bytes_written = 0;
@@ -326,10 +327,14 @@ void main(void) {
         }
       }
     }
+
+    // #ifdef TEST_ERROR_MODULE
     // check if session established
     if (UtvmRpcServerSessionIsEstablished(server)) {
-      TVMPlatformAbort((tvm_crt_error_t)0x01011);
+      UtvmErrorModuleSetError(g_error_module, kTVMPlatform, kTvmErrorFramingPayloadOverflow);
+      TVMPlatformAbort((tvm_crt_error_t)0x0102);
     }
+    // #endif
   }
 
 #ifdef CONFIG_ARCH_POSIX

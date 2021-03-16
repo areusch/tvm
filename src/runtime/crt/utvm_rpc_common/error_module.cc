@@ -36,17 +36,17 @@ void ErrorModule::Clear() {
   is_valid_ = false;
 }
 
-void ErrorModule::SetError(ErrorSource source, ErrorReason reason) {
+void ErrorModule::SetError(error_source_t source, uint16_t reason) {
   source_ = source;
   reason_ = reason;
   is_valid_ = true;
 }
 
-ErrorSource ErrorModule::GetErrorSource() {
+error_source_t ErrorModule::GetErrorSource() {
   return source_;
 }
 
-ErrorReason ErrorModule::GetErrorReason() {
+uint16_t ErrorModule::GetErrorReason() {
   return reason_;
 }
 

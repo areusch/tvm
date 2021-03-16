@@ -101,6 +101,11 @@ typedef enum {
   kTvmErrorSystemErrorMask = (1 << (sizeof(int) * 4 - 1)),
 } tvm_crt_error_t;
 
+typedef enum error_source {
+  kTVMPlatform = 0x00,
+  kZephyr = 0x01,
+} error_source_t;
+
 #ifdef __cplusplus
 }
 #endif

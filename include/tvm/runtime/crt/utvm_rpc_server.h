@@ -101,7 +101,7 @@ void UtvmErrorModuleClear(utvm_rpc_server_error_module_t error_ptr);
 *   \param reason Error reason.
 */
 void UtvmErrorModuleSetError(utvm_rpc_server_error_module_t error_ptr, 
-  uint8_t source, uint8_t reason);
+  error_source_t source, uint16_t reason);
 
 /*! \brief Sends ErrorModule as a message to host.
 *   
