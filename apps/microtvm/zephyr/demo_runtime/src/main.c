@@ -63,6 +63,7 @@ static const struct device* led0_pin;
 
 static size_t g_num_bytes_requested = 0;
 static size_t g_num_bytes_written = 0;
+static utvm_rpc_server_error_module_t g_error_module;
 
 // Called by TVM to write serial data to the UART.
 ssize_t write_serial(void* unused_context, const uint8_t* data, size_t size) {
@@ -100,6 +101,13 @@ size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes,
 
 // Called by TVM when an internal invariant is violated, and execution cannot continue.
 void TVMPlatformAbort(tvm_crt_error_t error) {
+  TVMLogf("Restarting");
+  if (UtvmErrorModuleIsValid(g_error_module)) {
+    UtvmErrorReport(g_error_module);
+    TVMLogf("reported");
+    UtvmErrorModuleClear(g_error_module);
+  }
+
   sys_reboot(SYS_REBOOT_COLD);
 #ifdef CONFIG_LED
   gpio_pin_set(led0_pin, LED0_PIN, 1);
@@ -285,7 +293,12 @@ void main(void) {
 
   // Initialize microTVM RPC server, which will receive commands from the UART and execute them.
   utvm_rpc_server_t server = UTvmRpcServerInit(write_serial, NULL);
+
+  //Initialize microTVM RPC server Error Module
+  g_error_module = UtvmRpcServerErrorModuleInit();
   TVMLogf("microTVM Zephyr runtime - running");
+  UtvmErrorModuleSetError(g_error_module, 0x00, 0x00);
+  
 #ifdef CONFIG_LED
   gpio_pin_set(led0_pin, LED0_PIN, 0);
 #endif
@@ -304,7 +317,7 @@ void main(void) {
         if (err != kTvmErrorNoError && err != kTvmErrorFramingShortPacket) {
           TVMPlatformAbort(err);
         }
-       if (g_num_bytes_written != 0 || g_num_bytes_requested != 0) {
+        if (g_num_bytes_written != 0 || g_num_bytes_requested != 0) {
           if (g_num_bytes_written != g_num_bytes_requested) {
             TVMPlatformAbort((tvm_crt_error_t)0xbeef5);
           }
@@ -312,6 +325,10 @@ void main(void) {
           g_num_bytes_requested = 0;
         }
       }
+    }
+    // check if session established
+    if (UtvmRpcServerSessionIsEstablished(server)) {
+      TVMPlatformAbort((tvm_crt_error_t)0x01011);
     }
   }
 

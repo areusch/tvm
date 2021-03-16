@@ -62,7 +62,7 @@ tvm_crt_error_t Session::SendInternal(MessageType message_type, const uint8_t* m
 
 tvm_crt_error_t Session::StartMessage(MessageType message_type, size_t message_size_bytes) {
   SessionHeader header{session_id_, message_type};
-  if (message_type == MessageType::kLog) {
+  if (message_type == MessageType::kLog || message_type == MessageType::kTerminateSession) {
     header.session_id = 0;
   }
 
@@ -153,7 +153,8 @@ void Session::SessionReceiver::PacketDone(bool is_valid) {
     case MessageType::kTerminateSession:
       if (session_->state_ == State::kSessionEstablished) {
         session_->state_ = State::kNoSessionEstablished;
-        session_->OnSessionTerminatedMessage();
+        session_->message_received_func_(session_->message_received_func_context_,
+                                         header.message_type, session_->receive_buffer_);
       }
       session_->receive_buffer_has_complete_message_ = false;
       break;

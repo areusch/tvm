@@ -25,6 +25,7 @@
 
 #include <tvm/runtime/crt/rpc_common/framing.h>
 #include <tvm/runtime/crt/rpc_common/session.h>
+#include <tvm/runtime/crt/rpc_common/error_module.h>
 #include <tvm/runtime/registry.h>
 #include <tvm/support/logging.h>
 
@@ -329,6 +330,8 @@ class MicroTransportChannel : public RPCChannel {
 
   void HandleMessageReceived(MessageType message_type, FrameBuffer* buf) {
     size_t message_size_bytes;
+    uint8_t message[1024];
+
     switch (message_type) {
       case MessageType::kStartSessionInit:
         break;
@@ -338,6 +341,37 @@ class MicroTransportChannel : public RPCChannel {
         break;
 
       case MessageType::kTerminateSession:
+        LOG(INFO) << "kTerminateSession";
+        message_size_bytes = buf->ReadAvailable();
+        LOG(INFO) << "message_size_bytes: " << message_size_bytes;
+
+        if (message_size_bytes > sizeof(message) - 1) {
+          LOG(ERROR) << "Remote message is too long" << message_size_bytes
+                     << " bytes";
+          return;
+        }
+
+        // Handle error message
+        if (message_size_bytes > 0) {
+          ICHECK_EQ(buf->Read(message, sizeof(message) - 1), message_size_bytes);
+          session_.ClearReceiveBuffer();
+          if (message[0] == kErrorModuleMagicNumber && message[3] == kErrorModuleMagicNumber) {
+            ErrorModule received_error = ErrorModule((ErrorSource)message[1], (ErrorReason)message[2]);
+
+            switch (received_error.GetErrorSource()) {
+              case ErrorSource::kTVMPlatform:
+                LOG(ERROR) << "microTVM error: source TVM platform. Error reason: "
+                  << (char)received_error.GetErrorReason();
+                break;
+              case ErrorSource::kZephyr:
+                LOG(ERROR) << "microTVM error: source Zephyr. Error reason: "
+                  << (char)received_error.GetErrorReason();
+                break;
+            }
+          }
+        }
+
+        // Update state
         if (state_ == State::kReset) {
           state_ = State::kSessionTerminated;
         } else if (state_ == State::kSessionTerminated) {
@@ -349,7 +383,6 @@ class MicroTransportChannel : public RPCChannel {
         break;
 
       case MessageType::kLog:
-        uint8_t message[1024];
         message_size_bytes = buf->ReadAvailable();
         if (message_size_bytes == 0) {
           return;
@@ -363,11 +396,15 @@ class MicroTransportChannel : public RPCChannel {
         message[message_size_bytes] = 0;
         LOG(INFO) << "remote: " << message;
         session_.ClearReceiveBuffer();
-        return;
+        break;
 
       case MessageType::kNormal:
         did_receive_message_ = true;
         message_buffer_ = buf;
+        break;
+      
+      default:
+        LOG(FATAL) << "RPC unknown message";
         break;
     }
   }

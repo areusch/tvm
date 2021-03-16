@@ -42,6 +42,7 @@
 #include <tvm/runtime/crt/rpc_common/framing.h>
 #include <tvm/runtime/crt/rpc_common/session.h>
 #include <tvm/runtime/crt/utvm_rpc_server.h>
+#include <tvm/runtime/crt/rpc_common/error_module.h>
 
 #include "../../minrpc/minrpc_server.h"
 #include "crt_config.h"
@@ -164,6 +165,10 @@ class MicroRPCServer {
     }
   }
 
+  Session* GetSession() {
+    return &session_;
+  }
+
  private:
   FrameBuffer receive_buffer_;
   SerialWriteStream send_stream_;
@@ -198,6 +203,7 @@ void* operator new[](size_t count, void* ptr) noexcept { return ptr; }
 extern "C" {
 
 static utvm_rpc_server_t g_rpc_server = nullptr;
+static utvm_rpc_server_error_module_t g_error = nullptr;
 
 utvm_rpc_server_t UTvmRpcServerInit(utvm_rpc_channel_write_t write_func, void* write_func_ctx) {
   tvm::runtime::micro_rpc::g_write_func = write_func;
@@ -263,6 +269,72 @@ tvm_crt_error_t UTvmRpcServerLoop(utvm_rpc_server_t server_ptr, uint8_t** new_da
   tvm::runtime::micro_rpc::MicroRPCServer* server =
       static_cast<tvm::runtime::micro_rpc::MicroRPCServer*>(server_ptr);
   return server->Loop(new_data, new_data_size_bytes);
+}
+
+utvm_rpc_server_error_module_t UtvmRpcServerErrorModuleInit() {
+  void* error_module_memory;
+
+  DLContext ctx = {kDLCPU, 0};
+  tvm_crt_error_t err = TVMPlatformMemoryAllocate(sizeof(tvm::runtime::micro_rpc::ErrorModule), ctx,
+                                  &error_module_memory);
+  if (err != kTvmErrorNoError) {
+    TVMPlatformAbort(err);
+  }
+  
+  auto error_module = new (error_module_memory) tvm::runtime::micro_rpc::ErrorModule();
+  g_error = static_cast<utvm_rpc_server_error_module_t>(error_module);
+  return g_error;
+}
+
+bool UtvmRpcServerSessionIsEstablished(utvm_rpc_server_t server_ptr) {
+  tvm::runtime::micro_rpc::MicroRPCServer* server =
+      static_cast<tvm::runtime::micro_rpc::MicroRPCServer*>(server_ptr);
+  return server->GetSession()->IsEstablished();
+}
+
+bool UtvmErrorModuleIsValid(utvm_rpc_server_error_module_t error_ptr) {
+  tvm::runtime::micro_rpc::ErrorModule* error_module =
+    static_cast<tvm::runtime::micro_rpc::ErrorModule*>(error_ptr);
+    return error_module->isValid();
+}
+
+void UtvmErrorModuleClear(utvm_rpc_server_error_module_t error_ptr) {
+  tvm::runtime::micro_rpc::ErrorModule* error_module =
+    static_cast<tvm::runtime::micro_rpc::ErrorModule*>(error_ptr);
+  error_module->Clear();
+}
+
+void UtvmErrorModuleSetError(utvm_rpc_server_error_module_t error_ptr, 
+  uint8_t source, uint8_t reason) {
+  tvm::runtime::micro_rpc::ErrorModule* error_module =
+    static_cast<tvm::runtime::micro_rpc::ErrorModule*>(error_ptr);
+  error_module->SetError((tvm::runtime::micro_rpc::ErrorSource) source, 
+    (tvm::runtime::micro_rpc::ErrorReason) reason);
+}
+
+void UtvmErrorReport(utvm_rpc_server_error_module_t error_ptr) {
+  tvm::runtime::micro_rpc::ErrorModule* error_module =
+    static_cast<tvm::runtime::micro_rpc::ErrorModule*>(error_ptr);
+  char message_buffer[4];
+  size_t num_bytes = 0;
+  message_buffer[0] = (char)tvm::runtime::micro_rpc::kErrorModuleMagicNumber;
+  message_buffer[1] = (char)error_module->GetErrorSource();
+  message_buffer[2] = (char)error_module->GetErrorReason();
+  message_buffer[3] = (char)tvm::runtime::micro_rpc::kErrorModuleMagicNumber;
+  num_bytes += 4;
+
+  if (g_rpc_server != nullptr) {
+    static_cast<tvm::runtime::micro_rpc::MicroRPCServer*>(g_rpc_server)
+        ->GetSession()->SendMessage(tvm::runtime::micro_rpc::MessageType::kTerminateSession,
+        reinterpret_cast<uint8_t*>(message_buffer), num_bytes);
+  } else {
+    tvm::runtime::micro_rpc::SerialWriteStream write_stream;
+    tvm::runtime::micro_rpc::Framer framer{&write_stream};
+    tvm::runtime::micro_rpc::Session session{&framer, nullptr, nullptr, nullptr};
+    tvm_crt_error_t err =
+        session.SendMessage(tvm::runtime::micro_rpc::MessageType::kNormal,
+                            reinterpret_cast<uint8_t*>(message_buffer), num_bytes);
+  }
 }
 
 }  // extern "C"
