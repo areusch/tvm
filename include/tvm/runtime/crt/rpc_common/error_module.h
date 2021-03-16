@@ -36,11 +36,6 @@ namespace micro_rpc {
 
 const uint8_t kErrorModuleMagicNumber = 0xAA;
 
-// enum class ErrorSource : uint8_t {
-//   kTVMPlatform = 0x00,
-//   kZephyr = 0x01,
-// };
-
 class ErrorModule {
   public:
     ErrorModule(error_source_t source, uint16_t reason)

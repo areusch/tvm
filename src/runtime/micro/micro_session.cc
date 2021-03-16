@@ -357,21 +357,9 @@ class MicroTransportChannel : public RPCChannel {
           ICHECK_EQ(buf->Read(message, sizeof(message) - 1), message_size_bytes);
           session_.ClearReceiveBuffer();
           if (message[0] == kErrorModuleMagicNumber && message[4] == kErrorModuleMagicNumber) {
-            uint16_t reason = (message[2] << 8) + message[3];
+            uint16_t reason = ((message[2] << 8) & 0xFF00) + (message[3] & 0x00FF);
             ErrorModule received_error = ErrorModule((error_source_t)message[1], reason);
-
-            std::string category = std::to_string(message[2]);
-            std::string code = std::to_string(message[3]);
-            switch (received_error.GetErrorSource()) {
-              case error_source_t::kTVMPlatform:
-                LOG(ERROR) << "microTVM error: source => TVM platform: reason=> category:"
-                  << category << "\tcode=> " << code;
-                break;
-              case error_source_t::kZephyr:
-                LOG(ERROR) << "microTVM error: source => Zephyr: reason=> category:"
-                  << category << "\tcode=> " << code;
-                break;
-            }
+            LOG(ERROR) << ErrorModuleGetErrorMessage(received_error);
           }
         }
 
@@ -411,6 +399,28 @@ class MicroTransportChannel : public RPCChannel {
         LOG(FATAL) << "RPC unknown message";
         break;
     }
+  }
+
+  std::string ErrorModuleGetErrorMessage(ErrorModule error) {
+    std::string message = "microTVM error: source => ";
+    switch (error.GetErrorSource()) {
+      case error_source_t::kTVMPlatform:
+        message.append("TVMPlatform");
+        break;
+      
+      case error_source_t::kZephyr:
+        message.append("Zephyr");
+        break;
+    }
+    
+    uint16_t reason = error.GetErrorReason();
+    uint8_t category = ((reason & 0xFF00) >> 8);
+    uint8_t code = reason & 0x00FF;
+    message.append(": reason=> category: ");
+    message.append(std::to_string(category));
+    message.append(",\tcode: ");
+    message.append(std::to_string(code));
+    return message;
   }
 
   State state_;
