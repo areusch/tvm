@@ -29,6 +29,7 @@
 #include <tvm/runtime/crt/error_codes.h>
 #include <tvm/runtime/registry.h>
 #include <tvm/support/logging.h>
+#include <checksum.h>
 
 #include <algorithm>
 #include <chrono>
@@ -342,10 +343,7 @@ class MicroTransportChannel : public RPCChannel {
         break;
 
       case MessageType::kTerminateSession:
-        LOG(INFO) << "kTerminateSession";
         message_size_bytes = buf->ReadAvailable();
-        LOG(INFO) << "message_size_bytes: " << message_size_bytes;
-
         if (message_size_bytes > sizeof(message) - 1) {
           LOG(ERROR) << "Remote message is too long" << message_size_bytes
                      << " bytes";
@@ -356,10 +354,17 @@ class MicroTransportChannel : public RPCChannel {
         if (message_size_bytes > 0) {
           ICHECK_EQ(buf->Read(message, sizeof(message) - 1), message_size_bytes);
           session_.ClearReceiveBuffer();
-          if (message[0] == kErrorModuleMagicNumber && message[4] == kErrorModuleMagicNumber) {
-            uint16_t reason = ((message[2] << 8) & 0xFF00) + (message[3] & 0x00FF);
-            ErrorModule received_error = ErrorModule((error_source_t)message[1], reason);
-            LOG(ERROR) << ErrorModuleGetErrorMessage(received_error);
+          
+          if (message[0] == kErrorModuleMagicNumber) {
+            // Check CRC
+            uint16_t crc_16 = ((message[4] << 8) & 0xFF00) + (message[5] & 0x00FF);
+            if (crc_ccitt_1d0f(message, 4) == crc_16) {
+              uint16_t reason = ((message[2] << 8) & 0xFF00) + (message[3] & 0x00FF);
+              ErrorModule received_error = ErrorModule((error_source_t)message[1], reason);
+              LOG(ERROR) << ErrorModuleGetErrorMessage(received_error);
+            } else {
+              LOG(FATAL) << "CRC not matched.";  
+            }
           }
         }
 

@@ -43,6 +43,7 @@
 #include <tvm/runtime/crt/rpc_common/session.h>
 #include <tvm/runtime/crt/utvm_rpc_server.h>
 #include <tvm/runtime/crt/rpc_common/error_module.h>
+#include <checksum.h>
 
 #include "../../minrpc/minrpc_server.h"
 #include "crt_config.h"
@@ -314,15 +315,20 @@ void UtvmErrorModuleSetError(utvm_rpc_server_error_module_t error_ptr,
 void UtvmErrorReport(utvm_rpc_server_error_module_t error_ptr) {
   tvm::runtime::micro_rpc::ErrorModule* error_module =
     static_cast<tvm::runtime::micro_rpc::ErrorModule*>(error_ptr);
-  uint8_t message_buffer[5];
+  uint8_t message_buffer[16];
   size_t num_bytes = 0;
   message_buffer[0] = tvm::runtime::micro_rpc::kErrorModuleMagicNumber;
   message_buffer[1] = error_module->GetErrorSource();
   uint16_t reason = error_module->GetErrorReason();
   message_buffer[2] = static_cast<uint8_t>((reason & 0xFF00) >> 8);
   message_buffer[3] = static_cast<uint8_t>(reason & 0x00FF);
-  message_buffer[4] = tvm::runtime::micro_rpc::kErrorModuleMagicNumber;
-  num_bytes += 5;
+  uint16_t crc_16 = crc_ccitt_1d0f(message_buffer, 4);
+  message_buffer[4] = static_cast<uint8_t>((crc_16 & 0xFF00) >> 8);
+  message_buffer[5] = static_cast<uint8_t>(crc_16 & 0x00FF);
+  num_bytes += 6;
+
+  // Clear error.
+  error_module->Clear();
 
   if (g_rpc_server != nullptr) {
     static_cast<tvm::runtime::micro_rpc::MicroRPCServer*>(g_rpc_server)

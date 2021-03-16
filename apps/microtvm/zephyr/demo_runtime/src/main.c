@@ -101,11 +101,8 @@ size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes,
 
 // Called by TVM when an internal invariant is violated, and execution cannot continue.
 void TVMPlatformAbort(tvm_crt_error_t error) {
-  TVMLogf("Restarting");
   if (UtvmErrorModuleIsValid(g_error_module)) {
     UtvmErrorReport(g_error_module);
-    TVMLogf("reported");
-    UtvmErrorModuleClear(g_error_module);
   }
 
   sys_reboot(SYS_REBOOT_COLD);
@@ -319,7 +316,6 @@ void main(void) {
         }
         if (g_num_bytes_written != 0 || g_num_bytes_requested != 0) {
           if (g_num_bytes_written != g_num_bytes_requested) {
-            //TODO: figure out this number
             TVMPlatformAbort((tvm_crt_error_t)0xbeef5);
           }
           g_num_bytes_written = 0;
@@ -328,13 +324,13 @@ void main(void) {
       }
     }
 
-    // #ifdef TEST_ERROR_MODULE
+    #ifdef TEST_ERROR_MODULE
     // check if session established
     if (UtvmRpcServerSessionIsEstablished(server)) {
       UtvmErrorModuleSetError(g_error_module, kTVMPlatform, kTvmErrorFramingPayloadOverflow);
-      TVMPlatformAbort((tvm_crt_error_t)0x0102);
+      TVMPlatformAbort(kTvmErrorFramingPayloadOverflow);
     }
-    // #endif
+    #endif
   }
 
 #ifdef CONFIG_ARCH_POSIX
