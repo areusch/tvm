@@ -57,7 +57,7 @@ def _make_sess_from_op(model, zephyr_board, west_cmd, op_name, sched, arg_bufs):
     return _make_session(model, target, zephyr_board, west_cmd, mod)
 
 
-def _make_session(model, target, zephyr_board, west_cmd, mod):
+def _make_session(model, target, zephyr_board, west_cmd, mod, extra_opts=None):
     test_name = f"{os.path.splitext(os.path.abspath(__file__))[0]}-{model}"
     prev_build = f"{test_name}-last-build.micro-binary"
     workspace_root = (
@@ -82,6 +82,12 @@ def _make_session(model, target, zephyr_board, west_cmd, mod):
     # TODO(weberlo) verify this is necessary
     opts["bin_opts"]["ccflags"] = ["-std=gnu++14"]
     opts["lib_opts"]["ccflags"] = ["-std=gnu++14"]
+
+    # Add extra options
+    if extra_opts:
+        for opt_cat in extra_opts.keys():
+            for flag, val in extra_opts[opt_cat].items():
+                opts[opt_cat][flag].append(val)
 
     flasher_kw = {}
     if DEBUG:
@@ -130,6 +136,8 @@ PLATFORMS = {
     "nrf5340dk": ("nrf5340dk", "nrf5340dk_nrf5340_cpuapp"),
 }
 
+
+ONNX_MNIST_MODEL = "../../../../tests/micro/zephyr/testdata/mnist-8.onnx"
 
 # The same test code can be executed on both the QEMU simulation and on real hardware.
 def test_compile_runtime(platform, west_cmd):
@@ -214,16 +222,16 @@ def test_onnx(platform, west_cmd):
     model, zephyr_board = PLATFORMS[platform]
 
     # Load test images.
-    digit_2 = Image.open("testdata/digit-2.jpg").resize((28, 28))
+    digit_2 = Image.open("../../../../tests/micro/zephyr/testdata/digit-2.jpg").resize((28, 28))
     digit_2 = np.asarray(digit_2).astype("float32")
     digit_2 = np.expand_dims(digit_2, axis=0)
 
-    digit_9 = Image.open("testdata/digit-9.jpg").resize((28, 28))
+    digit_9 = Image.open("../../../../tests/micro/zephyr/testdata/digit-9.jpg").resize((28, 28))
     digit_9 = np.asarray(digit_9).astype("float32")
     digit_9 = np.expand_dims(digit_9, axis=0)
 
     # Load ONNX model and convert to Relay.
-    onnx_model = onnx.load("testdata/mnist-8.onnx")
+    onnx_model = onnx.load(ONNX_MNIST_MODEL)
     shape = (1, 1, 28, 28)
     relay_mod, params = relay.frontend.from_onnx(onnx_model, shape=shape, freeze_params=True)
     relay_mod = relay.transform.DynamicToStatic()(relay_mod)
@@ -393,6 +401,32 @@ def test_byoc_utvm(platform, west_cmd):
         west_cmd=west_cmd,
     )
 
+def test_error_module(platform, west_cmd):
+    """This is a simple test case to check microTVM RPC ErrorModule"""
+    model, zephyr_board = PLATFORMS[platform]
 
+    # Load ONNX model and convert to Relay.
+    onnx_model = onnx.load(ONNX_MNIST_MODEL)
+    shape = (1, 1, 28, 28)
+    relay_mod, params = relay.frontend.from_onnx(onnx_model, shape=shape, freeze_params=True)
+    relay_mod = relay.transform.DynamicToStatic()(relay_mod)
+
+    # We add the -link-params=1 option to ensure the model parameters are compiled in.
+    # There is currently a bug preventing the demo_runtime environment from receiving
+    # the model weights when set using graph_mod.set_input().
+    # See: https://github.com/apache/tvm/issues/7567
+    target = tvm.target.target.micro(model, options=["-link-params=1"])
+    with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}):
+        lowered = relay.build(relay_mod, target, params=params)
+        graph = lowered.get_json()
+
+    # Enbale TEST_ERROR_MODULE build flag
+    extra_opts = {"bin_opts": {"cflags": "-DTEST_ERROR_MODULE"}}
+    with _make_session(model, target, zephyr_board, west_cmd, lowered.lib, extra_opts) as session:
+        graph_mod = tvm.micro.create_local_graph_runtime(
+            graph, session.get_system_lib(), session.context
+        )
+        return
+    
 if __name__ == "__main__":
     sys.exit(pytest.main([os.path.dirname(__file__)] + sys.argv[1:]))
