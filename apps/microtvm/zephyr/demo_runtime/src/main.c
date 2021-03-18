@@ -41,6 +41,7 @@
 #include <sys/ring_buffer.h>
 #include <tvm/runtime/crt/logging.h>
 #include <tvm/runtime/crt/utvm_rpc_server.h>
+#include <tvm/runtime/crt/error_reporting/error_module.h>
 #include <unistd.h>
 #include <zephyr.h>
 #include <random/rand32.h>
@@ -63,7 +64,7 @@ static const struct device* led0_pin;
 
 static size_t g_num_bytes_requested = 0;
 static size_t g_num_bytes_written = 0;
-static utvm_rpc_server_error_module_t g_error_module;
+static ErrorModule* g_error;
 
 // Called by TVM to write serial data to the UART.
 ssize_t write_serial(void* unused_context, const uint8_t* data, size_t size) {
@@ -101,9 +102,13 @@ size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes,
 
 // Called by TVM when an internal invariant is violated, and execution cannot continue.
 void TVMPlatformAbort(tvm_crt_error_t error) {
-  if (UtvmErrorModuleIsValid(g_error_module)) {
-    UtvmErrorReport(g_error_module);
+  TVMLogf("Reboot");
+  if (g_error) {
+    TVMLogf("inside abort: %d, %d", g_error->source, g_error->reason);
   }
+  // if (UtvmErrorModuleIsValid(g_error)) {
+  //   // UtvmErrorReport(g_error);
+  // }
 
   sys_reboot(SYS_REBOOT_COLD);
 #ifdef CONFIG_LED
@@ -292,7 +297,8 @@ void main(void) {
   utvm_rpc_server_t server = UTvmRpcServerInit(write_serial, NULL);
 
   //Initialize microTVM RPC server Error Module
-  g_error_module = UtvmRpcServerErrorModuleInit();
+  g_error = UtvmRpcServerErrorModuleInit();
+  TVMLogf("value in main: %d", g_error->magic_num);
   TVMLogf("microTVM Zephyr runtime - running");
   
 #ifdef CONFIG_LED
@@ -311,7 +317,6 @@ void main(void) {
         // Pass the received bytes to the RPC server.
         tvm_crt_error_t err = UTvmRpcServerLoop(server, &cursor, &bytes_remaining);
         if (err != kTvmErrorNoError && err != kTvmErrorFramingShortPacket) {
-          UtvmErrorModuleSetError(g_error_module, kTVMPlatform, (uint16_t)err);
           TVMPlatformAbort(err);
         }
         if (g_num_bytes_written != 0 || g_num_bytes_requested != 0) {
@@ -327,7 +332,8 @@ void main(void) {
     #ifdef TEST_ERROR_MODULE
     // check if session established
     if (UtvmRpcServerSessionIsEstablished(server)) {
-      UtvmErrorModuleSetError(g_error_module, kTVMPlatform, kTvmErrorFramingPayloadOverflow);
+      TVMLogf("before set: %d, %d", g_error->source, g_error->reason);
+      ErrorModuleSetError(g_error, kTVMPlatform, kTvmErrorFramingPayloadOverflow);
       TVMPlatformAbort(kTvmErrorFramingPayloadOverflow);
     }
     #endif
