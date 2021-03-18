@@ -25,7 +25,7 @@
 
 #include <tvm/runtime/crt/rpc_common/framing.h>
 #include <tvm/runtime/crt/rpc_common/session.h>
-#include <tvm/runtime/crt/rpc_common/error_module.h>
+#include <tvm/runtime/crt/error_reporting/error_module.h>
 #include <tvm/runtime/crt/error_codes.h>
 #include <tvm/runtime/registry.h>
 #include <tvm/support/logging.h>
@@ -360,10 +360,12 @@ class MicroTransportChannel : public RPCChannel {
             uint16_t crc_16 = ((message[4] << 8) & 0xFF00) + (message[5] & 0x00FF);
             if (crc_ccitt_1d0f(message, 4) == crc_16) {
               uint16_t reason = ((message[2] << 8) & 0xFF00) + (message[3] & 0x00FF);
-              ErrorModule received_error = ErrorModule((error_source_t)message[1], reason);
+              ErrorModule* received_error = (ErrorModule*)malloc(sizeof(ErrorModule));
+              received_error->source = (error_source_t)message[1];
+              received_error->reason = reason;
               LOG(ERROR) << ErrorModuleGetErrorMessage(received_error);
             } else {
-              LOG(FATAL) << "CRC not matched.";  
+              LOG(FATAL) << "CRC not matched.";
             }
           }
         }
@@ -406,9 +408,9 @@ class MicroTransportChannel : public RPCChannel {
     }
   }
 
-  std::string ErrorModuleGetErrorMessage(ErrorModule error) {
+  std::string ErrorModuleGetErrorMessage(ErrorModule* error_ptr) {
     std::string message = "microTVM error: source => ";
-    switch (error.GetErrorSource()) {
+    switch (error_ptr->source) {
       case error_source_t::kTVMPlatform:
         message.append("TVMPlatform");
         break;
@@ -418,7 +420,7 @@ class MicroTransportChannel : public RPCChannel {
         break;
     }
     
-    uint16_t reason = error.GetErrorReason();
+    uint16_t reason = error_ptr->reason;
     uint8_t category = ((reason & 0xFF00) >> 8);
     uint8_t code = reason & 0x00FF;
     message.append(": reason=> category: ");
