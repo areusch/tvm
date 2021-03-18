@@ -102,14 +102,6 @@ size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes,
 
 // Called by TVM when an internal invariant is violated, and execution cannot continue.
 void TVMPlatformAbort(tvm_crt_error_t error) {
-  TVMLogf("Reboot");
-  if (g_error) {
-    TVMLogf("inside abort: %d, %d", g_error->source, g_error->reason);
-  }
-  // if (UtvmErrorModuleIsValid(g_error)) {
-  //   // UtvmErrorReport(g_error);
-  // }
-
   sys_reboot(SYS_REBOOT_COLD);
 #ifdef CONFIG_LED
   gpio_pin_set(led0_pin, LED0_PIN, 1);
