@@ -47,9 +47,36 @@ typedef struct ErrorModule {
 } ErrorModule;
 
 
+/*! \brief Checks if ErrorModule has magic number and valid CRC.
+*   
+*   \param error_ptr Pointer to ErrorModule.
+*
+*   \return Validity of magic number and CRC.
+*/
 bool ErrorModuleIsValid(ErrorModule* error_ptr);
+
+/*! \brief Checks if CRC is valid.
+*   
+*   \param error_ptr Pointer to ErrorModule.
+*
+*   \return Validity of CRC.
+*/
 bool ErrorModuleIsCRCValid(ErrorModule* error_ptr);
+
+/*! \brief Sets source and reason of error.
+*   
+*   \param error_ptr Pointer to ErrorModule.
+*   \param source Source of error.
+*   \param reason Reason of error.
+*/
 void ErrorModuleSetError(ErrorModule* error_ptr, error_source_t source, uint16_t reason);
+
+/*! \brief Calculates CRC of the ErrorModule.
+*   
+*   \param error_ptr Pointer to ErrorModule.
+*
+*   \return CRC as uint16_t.
+*/
 uint16_t ErrorModuleCalculateCRC(ErrorModule* error_ptr);
 
 #ifdef __cplusplus

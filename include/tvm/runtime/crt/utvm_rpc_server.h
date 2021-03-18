@@ -71,10 +71,6 @@ utvm_rpc_server_t UTvmRpcServerInit(utvm_rpc_channel_write_t write_func, void* w
 tvm_crt_error_t UTvmRpcServerLoop(utvm_rpc_server_t server, uint8_t** new_data,
                                   size_t* new_data_size_bytes);
 
-
-/*! \brief Opaque pointer type to TVM RPC ErrorModule. */
-// typedef void* utvm_rpc_server_error_module_t;
-
 /*! \brief Initialize the TVM RPC ErrorModule.
 *
 *   \return A pointer to the Error Module. The pointer is allocated in the same memory space as
@@ -82,35 +78,13 @@ tvm_crt_error_t UTvmRpcServerLoop(utvm_rpc_server_t server, uint8_t** new_data,
 */
 ErrorModule* UtvmRpcServerErrorModuleInit();
 
-/*! \brief Check if ErrorModule is valid.
-*   
-*   \param error_ptr Pointer to ErrorModule.
-*   \return is_valid_ bool.
-*/
-// bool UtvmErrorModuleIsValid(utvm_rpc_server_error_module_t error_ptr);
-
-/*! \brief Clear ErrorModule validity.
-*   
-*   \param error_ptr Pointer to ErrorModule.
-*/
-// void UtvmErrorModuleClear(utvm_rpc_server_error_module_t error_ptr);
-
-/*! \brief Sends ErrorModule as a message to host.
-*   
-*   \param error_ptr Pointer to ErrorModule.
-*   \param source Error source.
-*   \param reason Error reason.
-*/
-// void UtvmErrorModuleSetError(utvm_rpc_server_error_module_t error_ptr, 
-//   error_source_t source, uint16_t reason);
-
 /*! \brief Sends ErrorModule as a message to host.
 *   
 *   \param error_ptr Pointer to ErrorModule.
 */
 void UtvmErrorReport(ErrorModule* error_ptr);
 
-//TODO
+//TODO: check if this needed.
 bool UtvmRpcServerSessionIsEstablished(utvm_rpc_server_t server_ptr);
 
 

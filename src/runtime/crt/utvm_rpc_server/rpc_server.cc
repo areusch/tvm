@@ -233,7 +233,7 @@ utvm_rpc_server_t UTvmRpcServerInit(utvm_rpc_channel_write_t write_func, void* w
   g_rpc_server = static_cast<utvm_rpc_server_t>(rpc_server);
   rpc_server->Initialize();
   
-  // Report last error
+  // Report last error.
   if (g_error_module != nullptr) {
     TVMLogf("init: %d, %d, %d", g_error_module->magic_num, g_error_module->source, g_error_module->magic_num);
     if (ErrorModuleIsValid(g_error_module)) {
@@ -293,26 +293,12 @@ bool UtvmRpcServerSessionIsEstablished(utvm_rpc_server_t server_ptr) {
   return server->GetSession()->IsEstablished();
 }
 
-// bool UtvmErrorModuleIsValid(utvm_rpc_server_error_module_t error_ptr) {
-//   tvm::runtime::micro_rpc::ErrorModule* error_module =
-//     static_cast<tvm::runtime::micro_rpc::ErrorModule*>(error_ptr);
-//     return error_module->isValid();
-// }
-
-// void UtvmErrorModuleClear(utvm_rpc_server_error_module_t error_ptr) {
-//   tvm::runtime::micro_rpc::ErrorModule* error_module =
-//     static_cast<tvm::runtime::micro_rpc::ErrorModule*>(error_ptr);
-//   error_module->Clear();
-// }
-
-// void UtvmErrorModuleSetError(utvm_rpc_server_error_module_t error_ptr, 
-//   error_source_t source, uint16_t reason) {
-//   tvm::runtime::micro_rpc::ErrorModule* error_module =
-//     static_cast<tvm::runtime::micro_rpc::ErrorModule*>(error_ptr);
-//   error_module->SetError(source, reason);
-// }
-
 void UtvmErrorReport(ErrorModule* error_ptr) {
+  if (error_ptr == nullptr) {
+    TVMLogf("ErrorModule pointer null");
+    return;
+  }
+  TVMLogf("report: %d, %d, %d, %d", error_ptr->magic_num, error_ptr->source, error_ptr->reason, error_ptr->crc);
   uint8_t message_buffer[16];
   size_t num_bytes = 0;
   message_buffer[0] = error_ptr->magic_num;
