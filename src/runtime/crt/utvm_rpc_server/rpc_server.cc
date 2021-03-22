@@ -122,12 +122,18 @@ class MicroRPCServer {
 
   void* operator new(size_t count, void* ptr) { return ptr; }
 
-  void Initialize() {
+  void Initialize(ErrorModule* error_ptr, uint32_t error_test) {
     uint8_t initial_session_nonce = Session::kInvalidNonce;
     tvm_crt_error_t error =
         TVMPlatformGenerateRandom(&initial_session_nonce, sizeof(initial_session_nonce));
     CHECK_EQ(kTvmErrorNoError, error, "generating random session id");
-    CHECK_EQ(kTvmErrorNoError, session_.Initialize(initial_session_nonce), "rpc server init");
+
+    // if (ErrorModuleIsValid(error_ptr)) {
+    if (error_test == 45) {
+      CHECK_EQ(kTvmErrorNoError, session_.Initialize(initial_session_nonce, error_ptr), "rpc server init");
+    } else {
+      CHECK_EQ(kTvmErrorNoError, session_.Initialize(initial_session_nonce), "rpc server init");
+    }
   }
 
   /*! \brief Process one message from the receive buffer, if possible.
@@ -204,7 +210,13 @@ void* operator new[](size_t count, void* ptr) noexcept { return ptr; }
 extern "C" {
 
 static utvm_rpc_server_t g_rpc_server = nullptr;
-static ErrorModule* g_error_module = (ErrorModule*)malloc(sizeof(ErrorModule));
+// #pragma PERSISTENT (g_error_module)
+// ErrorModule g_error_module __attribute__((section(".noinit")));
+// ErrorModule __noinit g_error_module;
+extern ErrorModule g_error_module;
+extern uint32_t abort_error;
+// __attribute__((section(".bss.noinit")));
+// (section(".noinit"))
 
 utvm_rpc_server_t UTvmRpcServerInit(utvm_rpc_channel_write_t write_func, void* write_func_ctx) {
   tvm::runtime::micro_rpc::g_write_func = write_func;
@@ -231,16 +243,25 @@ utvm_rpc_server_t UTvmRpcServerInit(utvm_rpc_channel_write_t write_func, void* w
   auto rpc_server = new (rpc_server_memory) tvm::runtime::micro_rpc::MicroRPCServer(
       receive_buffer, TVM_CRT_MAX_PACKET_SIZE_BYTES, write_func, write_func_ctx);
   g_rpc_server = static_cast<utvm_rpc_server_t>(rpc_server);
-  rpc_server->Initialize();
   
+  //check if error is valid
+  if (ErrorModuleIsValid(&g_error_module)) {
+    // TVMLogf("Error is valid");
+  } else {
+    // TVMLogf("Error nottttt valid");
+  }
+
+  // TVMLogf("before init: %d, %d, %d", g_error_module.magic_num, g_error_module.source, g_error_module.magic_num);
+  // TVMLogf("abort_error before init: %d", abort_error);
+
+  rpc_server->Initialize(&g_error_module, abort_error);
+
   // Report last error.
-  if (g_error_module != nullptr) {
-    TVMLogf("init: %d, %d, %d", g_error_module->magic_num, g_error_module->source, g_error_module->magic_num);
-    if (ErrorModuleIsValid(g_error_module)) {
-      UtvmErrorReport(g_error_module);
-    } else {
-      TVMLogf("ErrorModule not valid.");
-    }
+   TVMLogf("after init: %d, %d, %d", g_error_module.magic_num, g_error_module.source, g_error_module.reason);
+  if (ErrorModuleIsValid(&g_error_module)) {
+    // UtvmErrorReport(&g_error_module);
+  } else {
+    TVMLogf("ErrorModule not valid.");
   }
 
   return g_rpc_server;
@@ -284,7 +305,9 @@ tvm_crt_error_t UTvmRpcServerLoop(utvm_rpc_server_t server_ptr, uint8_t** new_da
 }
 
 ErrorModule* UtvmRpcServerErrorModuleInit() {
-  return g_error_module;
+  // g_error_module = (ErrorModule*)malloc(sizeof(ErrorModule));
+  // g_error_module = {.magic_num=0, .source=0, .reason=0};
+  return &g_error_module;
 }
 
 bool UtvmRpcServerSessionIsEstablished(utvm_rpc_server_t server_ptr) {

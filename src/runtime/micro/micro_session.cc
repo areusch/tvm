@@ -333,17 +333,20 @@ class MicroTransportChannel : public RPCChannel {
   void HandleMessageReceived(MessageType message_type, FrameBuffer* buf) {
     size_t message_size_bytes;
     uint8_t message[1024];
-
     switch (message_type) {
       case MessageType::kStartSessionInit:
+        LOG(ERROR) << "kStartSessionInit";
         break;
 
       case MessageType::kStartSessionReply:
+        LOG(ERROR) << "kStartSessionReply";
         state_ = State::kSessionEstablished;
         break;
 
       case MessageType::kTerminateSession:
+        LOG(ERROR) << "kTerminateSession";
         message_size_bytes = buf->ReadAvailable();
+        LOG(ERROR) << "Msg Length: " << message_size_bytes;
         if (message_size_bytes > sizeof(message) - 1) {
           LOG(ERROR) << "Remote message is too long" << message_size_bytes
                      << " bytes";

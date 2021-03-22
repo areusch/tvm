@@ -79,6 +79,15 @@ void ErrorModuleSetError(ErrorModule* error_ptr, error_source_t source, uint16_t
 */
 uint16_t ErrorModuleCalculateCRC(ErrorModule* error_ptr);
 
+/*! \brief Generates message for RPC.
+*   
+*   \param error_ptr Pointer to ErrorModule.
+*   \param message Message containter.
+*
+*   \return Message length.
+*/
+uint8_t ErrorModuleGenerateMessage(ErrorModule* error_ptr, uint8_t* message);
+
 #ifdef __cplusplus
 }
 #endif

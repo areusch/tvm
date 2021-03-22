@@ -50,6 +50,7 @@ if(USE_MICRO)
          "src/runtime/crt/memory *.c -> src/runtime/crt/memory"
          "src/runtime/crt/utvm_rpc_common *.cc -> src/runtime/crt/utvm_rpc_common"
          "src/runtime/crt/error_reporting *.c -> src/runtime/crt/error_reporting"
+         "src/runtime/crt/error_reporting *.c -> src/runtime/crt/utvm_rpc_common"
          "src/runtime/crt/utvm_rpc_server *.cc -> src/runtime/crt/utvm_rpc_server"
          "src/runtime/minrpc *.h -> src/runtime/minrpc"
          "src/support generic_arena.h -> src/support"

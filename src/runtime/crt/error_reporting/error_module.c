@@ -24,6 +24,7 @@
 
 #include <tvm/runtime/crt/error_reporting/error_module.h>
 #include <checksum.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,11 +55,48 @@ uint16_t ErrorModuleCalculateCRC(ErrorModule* error_ptr) {
   uint8_t message[16];
   message[0] = error_ptr->magic_num;
   message[1] = error_ptr->source;
-  message[2] = ((error_ptr->reason & 0xFF00) >> 8);
-  message[3] = (error_ptr->reason & 0x00FF);
+  message[2] = (uint8_t)((error_ptr->reason & 0xFF00) >> 8);
+  message[3] = (uint8_t)(error_ptr->reason & 0x00FF);
   return crc_ccitt_1d0f(message, 4);
 }
 
+uint8_t ErrorModuleGenerateMessage(ErrorModule* error_ptr, uint8_t* message) {
+  size_t num_bytes = 0;
+  message[0] = error_ptr->magic_num;
+  message[1] = error_ptr->source;
+  uint16_t reason = error_ptr->reason;
+  message[2] = (uint8_t)((reason & 0xFF00) >> 8);
+  message[3] = (uint8_t)(reason & 0x00FF);
+  uint16_t crc_16 = ErrorModuleCalculateCRC(error_ptr);
+  message[4] = (uint8_t)((crc_16 & 0xFF00) >> 8);
+  message[5] = (uint8_t)(crc_16 & 0x00FF);
+  num_bytes += 6;
+  return num_bytes;
+}
+
+// char* ErrorModuleGetMessage(ErrorModule* error_ptr) {
+//   char message[128];
+
+//   strcpy(message, "microTVM error: source => ");
+//   switch (error_ptr->source) {
+//     case error_source_t::kTVMPlatform:
+//       strcat(message, "TVMPlatform");
+//       break;
+    
+//     case error_source_t::kZephyr:
+//       strcat(message, "Zephyr");
+//       break;
+//   }
+  
+//   uint16_t reason = error_ptr->reason;
+//   uint8_t category = ((reason & 0xFF00) >> 8);
+//   uint8_t code = reason & 0x00FF;
+//   strcat(message, ": reason=> category: ");
+//   strcat(message, itoa(category));
+//   strcat(message, ",\tcode: ");
+//   strcat(message, itoa(code));
+//   return message;
+// }
 
 #ifdef __cplusplus
 }

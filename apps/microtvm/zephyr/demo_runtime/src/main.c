@@ -64,7 +64,10 @@ static const struct device* led0_pin;
 
 static size_t g_num_bytes_requested = 0;
 static size_t g_num_bytes_written = 0;
-static ErrorModule* g_error;
+ErrorModule __noinit g_error_module;
+uint8_t __noinit test_variable;
+uint32_t __noinit abort_error;
+// static ErrorModule* g_error;
 
 // Called by TVM to write serial data to the UART.
 ssize_t write_serial(void* unused_context, const uint8_t* data, size_t size) {
@@ -102,6 +105,8 @@ size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes,
 
 // Called by TVM when an internal invariant is violated, and execution cannot continue.
 void TVMPlatformAbort(tvm_crt_error_t error) {
+  // UtvmErrorReport(g_error);
+  TVMLogf("Reboot");
   sys_reboot(SYS_REBOOT_COLD);
 #ifdef CONFIG_LED
   gpio_pin_set(led0_pin, LED0_PIN, 1);
@@ -289,10 +294,12 @@ void main(void) {
   utvm_rpc_server_t server = UTvmRpcServerInit(write_serial, NULL);
 
   //Initialize microTVM RPC server Error Module
-  g_error = UtvmRpcServerErrorModuleInit();
-  TVMLogf("value in main: %d", g_error->magic_num);
+  // g_error = UtvmRpcServerErrorModuleInit();
+  TVMLogf("value in main: %d", g_error_module.magic_num);
   TVMLogf("microTVM Zephyr runtime - running");
-  
+  TVMLogf("test_variable: %d", test_variable);
+  TVMLogf("abort_error: %d", abort_error);
+
 #ifdef CONFIG_LED
   gpio_pin_set(led0_pin, LED0_PIN, 0);
 #endif
@@ -324,8 +331,15 @@ void main(void) {
     #ifdef TEST_ERROR_MODULE
     // check if session established
     if (UtvmRpcServerSessionIsEstablished(server)) {
-      TVMLogf("before set: %d, %d", g_error->source, g_error->reason);
-      ErrorModuleSetError(g_error, kTVMPlatform, kTvmErrorFramingPayloadOverflow);
+      TVMLogf("abort error before set: %d", abort_error);
+      abort_error = 45;
+      TVMLogf("Abort error before reset: %d", abort_error);
+      TVMLogf("before set: %d, %d", g_error_module.source, g_error_module.reason);
+      ErrorModuleSetError(&g_error_module, kTVMPlatform, kTvmErrorFramingPayloadOverflow);
+      TVMLogf("after set: %d, %d", g_error_module.source, g_error_module.reason);
+      if (ErrorModuleIsValid(&g_error_module)) {
+        TVMLogf("Error is valid now");
+      }
       TVMPlatformAbort(kTvmErrorFramingPayloadOverflow);
     }
     #endif
