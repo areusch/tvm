@@ -74,30 +74,6 @@ uint8_t ErrorModuleGenerateMessage(ErrorModule* error_ptr, uint8_t* message) {
   return num_bytes;
 }
 
-// char* ErrorModuleGetMessage(ErrorModule* error_ptr) {
-//   char message[128];
-
-//   strcpy(message, "microTVM error: source => ");
-//   switch (error_ptr->source) {
-//     case error_source_t::kTVMPlatform:
-//       strcat(message, "TVMPlatform");
-//       break;
-    
-//     case error_source_t::kZephyr:
-//       strcat(message, "Zephyr");
-//       break;
-//   }
-  
-//   uint16_t reason = error_ptr->reason;
-//   uint8_t category = ((reason & 0xFF00) >> 8);
-//   uint8_t code = reason & 0x00FF;
-//   strcat(message, ": reason=> category: ");
-//   strcat(message, itoa(category));
-//   strcat(message, ",\tcode: ");
-//   strcat(message, itoa(code));
-//   return message;
-// }
-
 #ifdef __cplusplus
 }
 #endif

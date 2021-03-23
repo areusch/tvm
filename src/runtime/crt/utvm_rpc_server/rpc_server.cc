@@ -244,12 +244,12 @@ utvm_rpc_server_t UTvmRpcServerInit(utvm_rpc_channel_write_t write_func, void* w
   rpc_server->Initialize(&g_error_module, abort_error);
   
   TVMLogf("abort_error after init in RPC server: %d", abort_error);
-  // Report last error.
-   TVMLogf("g_error after init in RPC server: %d, %d, %d", g_error_module.magic_num, g_error_module.source, g_error_module.reason);
+  TVMLogf("g_error after init in RPC server: %d, %d, %d", g_error_module.magic_num, g_error_module.source, g_error_module.reason);
+  
   if (ErrorModuleIsValid(&g_error_module)) {
-    // UtvmErrorReport(&g_error_module);
+    
   } else {
-    TVMLogf("ErrorModule not valid.");
+    TVMLogf("ErrorModule not valid in RPC server.");
   }
 
   return g_rpc_server;
@@ -293,8 +293,6 @@ tvm_crt_error_t UTvmRpcServerLoop(utvm_rpc_server_t server_ptr, uint8_t** new_da
 }
 
 ErrorModule* UtvmRpcServerErrorModuleInit() {
-  // g_error_module = (ErrorModule*)malloc(sizeof(ErrorModule));
-  // g_error_module = {.magic_num=0, .source=0, .reason=0};
   return &g_error_module;
 }
 
@@ -311,16 +309,7 @@ void UtvmErrorReport(ErrorModule* error_ptr) {
   }
   TVMLogf("report: %d, %d, %d, %d", error_ptr->magic_num, error_ptr->source, error_ptr->reason, error_ptr->crc);
   uint8_t message_buffer[16];
-  size_t num_bytes = 0;
-  message_buffer[0] = error_ptr->magic_num;
-  message_buffer[1] = error_ptr->source;
-  uint16_t reason = error_ptr->reason;
-  message_buffer[2] = static_cast<uint8_t>((reason & 0xFF00) >> 8);
-  message_buffer[3] = static_cast<uint8_t>(reason & 0x00FF);
-  uint16_t crc_16 = crc_ccitt_1d0f(message_buffer, 4);
-  message_buffer[4] = static_cast<uint8_t>((crc_16 & 0xFF00) >> 8);
-  message_buffer[5] = static_cast<uint8_t>(crc_16 & 0x00FF);
-  num_bytes += 6;
+  size_t num_bytes = ErrorModuleGenerateMessage(error_ptr, message_buffer);
 
   if (g_rpc_server != nullptr) {
     static_cast<tvm::runtime::micro_rpc::MicroRPCServer*>(g_rpc_server)

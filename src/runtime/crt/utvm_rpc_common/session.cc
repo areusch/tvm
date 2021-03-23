@@ -138,7 +138,6 @@ tvm_crt_error_t Session::SendMessage(MessageType message_type, const uint8_t* me
 }
 
 ssize_t Session::SessionReceiver::Write(const uint8_t* data, size_t data_size_bytes) {
-  // LOG_INFO("Session write call");
   if (session_->receive_buffer_has_complete_message_) {
     return kTvmErrorSessionReceiveBufferBusy;
   }
@@ -176,12 +175,12 @@ void Session::SessionReceiver::PacketDone(bool is_valid) {
     case MessageType::kTerminateSession:
       if (session_->state_ == State::kSessionEstablished) {
         session_->state_ = State::kNoSessionEstablished;
-      // #ifdef TVM_CRT_ERROR_MODULE_ENABLE
+      #ifdef TVM_CRT_ERROR_MODULE_ENABLE
         session_->message_received_func_(session_->message_received_func_context_,
                                          header.message_type, session_->receive_buffer_);
-      // #else
-      //   session_->OnSessionTerminatedMessage();
-      // #endif
+      #else
+        session_->OnSessionTerminatedMessage();
+      #endif
       }
       session_->receive_buffer_has_complete_message_ = false;
       break;

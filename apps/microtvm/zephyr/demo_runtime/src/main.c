@@ -206,7 +206,9 @@ tvm_crt_error_t TVMPlatformTimerStop(double* elapsed_time_seconds) {
 }
 
 // Memory pool for use by TVMPlatformMemoryAllocate.
-K_MEM_POOL_DEFINE(tvm_memory_pool, 64, 1024, 216, 4);
+// K_MEM_POOL_DEFINE(tvm_memory_pool, 64, 1024, 216, 4);
+//for testing error reporting
+K_MEM_POOL_DEFINE(tvm_memory_pool, 64, 1024, 80, 4);
 
 // Called by TVM to allocate memory.
 tvm_crt_error_t TVMPlatformMemoryAllocate(size_t num_bytes, DLContext ctx, void** out_ptr) {
