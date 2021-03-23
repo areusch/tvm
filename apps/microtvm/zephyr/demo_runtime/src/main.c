@@ -65,7 +65,6 @@ static const struct device* led0_pin;
 static size_t g_num_bytes_requested = 0;
 static size_t g_num_bytes_written = 0;
 ErrorModule __noinit g_error_module;
-uint8_t __noinit test_variable;
 uint32_t __noinit abort_error;
 // static ErrorModule* g_error;
 
@@ -107,7 +106,7 @@ size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes,
 void TVMPlatformAbort(tvm_crt_error_t error) {
   // UtvmErrorReport(g_error);
   TVMLogf("Reboot");
-  sys_reboot(SYS_REBOOT_COLD);
+  sys_reboot(SYS_REBOOT_WARM);
 #ifdef CONFIG_LED
   gpio_pin_set(led0_pin, LED0_PIN, 1);
 #endif
@@ -295,10 +294,9 @@ void main(void) {
 
   //Initialize microTVM RPC server Error Module
   // g_error = UtvmRpcServerErrorModuleInit();
-  TVMLogf("value in main: %d", g_error_module.magic_num);
+  TVMLogf("g_error_module.magic_num in main: %d", g_error_module.magic_num);
   TVMLogf("microTVM Zephyr runtime - running");
-  TVMLogf("test_variable: %d", test_variable);
-  TVMLogf("abort_error: %d", abort_error);
+  TVMLogf("abort_error in main: %d", abort_error);
 
 #ifdef CONFIG_LED
   gpio_pin_set(led0_pin, LED0_PIN, 0);
@@ -334,12 +332,13 @@ void main(void) {
       TVMLogf("abort error before set: %d", abort_error);
       abort_error = 45;
       TVMLogf("Abort error before reset: %d", abort_error);
-      TVMLogf("before set: %d, %d", g_error_module.source, g_error_module.reason);
+      TVMLogf("g_error_module before set: %d, %d, %d", g_error_module.magic_num, g_error_module.source, g_error_module.reason);
       ErrorModuleSetError(&g_error_module, kTVMPlatform, kTvmErrorFramingPayloadOverflow);
-      TVMLogf("after set: %d, %d", g_error_module.source, g_error_module.reason);
+      TVMLogf("g_error_module after set: %d, %d, %d", g_error_module.magic_num, g_error_module.source, g_error_module.reason);
       if (ErrorModuleIsValid(&g_error_module)) {
         TVMLogf("Error is valid now");
       }
+      TVMLogf("Before calling reboot");
       TVMPlatformAbort(kTvmErrorFramingPayloadOverflow);
     }
     #endif

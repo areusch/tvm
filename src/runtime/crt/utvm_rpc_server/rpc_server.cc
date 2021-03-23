@@ -210,13 +210,10 @@ void* operator new[](size_t count, void* ptr) noexcept { return ptr; }
 extern "C" {
 
 static utvm_rpc_server_t g_rpc_server = nullptr;
-// #pragma PERSISTENT (g_error_module)
+
 // ErrorModule g_error_module __attribute__((section(".noinit")));
-// ErrorModule __noinit g_error_module;
 extern ErrorModule g_error_module;
 extern uint32_t abort_error;
-// __attribute__((section(".bss.noinit")));
-// (section(".noinit"))
 
 utvm_rpc_server_t UTvmRpcServerInit(utvm_rpc_channel_write_t write_func, void* write_func_ctx) {
   tvm::runtime::micro_rpc::g_write_func = write_func;
@@ -244,20 +241,11 @@ utvm_rpc_server_t UTvmRpcServerInit(utvm_rpc_channel_write_t write_func, void* w
       receive_buffer, TVM_CRT_MAX_PACKET_SIZE_BYTES, write_func, write_func_ctx);
   g_rpc_server = static_cast<utvm_rpc_server_t>(rpc_server);
   
-  //check if error is valid
-  if (ErrorModuleIsValid(&g_error_module)) {
-    // TVMLogf("Error is valid");
-  } else {
-    // TVMLogf("Error nottttt valid");
-  }
-
-  // TVMLogf("before init: %d, %d, %d", g_error_module.magic_num, g_error_module.source, g_error_module.magic_num);
-  // TVMLogf("abort_error before init: %d", abort_error);
-
   rpc_server->Initialize(&g_error_module, abort_error);
-
+  
+  TVMLogf("abort_error after init in RPC server: %d", abort_error);
   // Report last error.
-   TVMLogf("after init: %d, %d, %d", g_error_module.magic_num, g_error_module.source, g_error_module.reason);
+   TVMLogf("g_error after init in RPC server: %d, %d, %d", g_error_module.magic_num, g_error_module.source, g_error_module.reason);
   if (ErrorModuleIsValid(&g_error_module)) {
     // UtvmErrorReport(&g_error_module);
   } else {
