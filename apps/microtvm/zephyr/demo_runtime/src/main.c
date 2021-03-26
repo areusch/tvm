@@ -106,7 +106,7 @@ size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes,
 void TVMPlatformAbort(tvm_crt_error_t error) {
   // UtvmErrorReport(g_error);
   TVMLogf("Reboot");
-  sys_reboot(SYS_REBOOT_WARM);
+  sys_reboot(SYS_REBOOT_COLD);
 #ifdef CONFIG_LED
   gpio_pin_set(led0_pin, LED0_PIN, 1);
 #endif
@@ -350,5 +350,3 @@ void main(void) {
   posix_exit(0);
 #endif
 }
-
-

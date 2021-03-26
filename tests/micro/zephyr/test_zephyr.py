@@ -46,7 +46,7 @@ BUILD = True
 # If set, enable a debug session while the test is running.
 # Before running the test, in a separate shell, you should run:
 #   python -m tvm.exec.microtvm_debug_shell
-DEBUG = False
+DEBUG = True
 
 
 def _make_sess_from_op(model, zephyr_board, west_cmd, op_name, sched, arg_bufs):
@@ -469,6 +469,6 @@ def test_error_reporting(platform, west_cmd):
         # result = graph_mod.get_output(0).asnumpy()
         # tvm.testing.assert_allclose(graph_mod.get_input(0).asnumpy(), x_in)
         # tvm.testing.assert_allclose(result, x_in * x_in + 1)
-    
+
 if __name__ == "__main__":
     sys.exit(pytest.main([os.path.dirname(__file__)] + sys.argv[1:]))
