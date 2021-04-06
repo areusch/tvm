@@ -27,15 +27,14 @@
 #include "tvm_executor.h"
 
 #include <dlpack/dlpack.h>
-
+#include <tvm/runtime/c_runtime_api.h>
 #include "tvm_backend.h"
-#include "tvm_error.h"
 
 tvm_workspace_t* tvm_runtime_workspace;
 
 tvm_crt_error_t tvm_runtime_run(const tvm_model_t* model, void** inputs, void** outputs,
                                 tvm_context_t* context) {
-  static DLContext fake_ctx = {kDLCPU, 0};
+  static DLDevice fake_dev = {kDLCPU, 0};
   static int64_t fake_dims = 0;
   static int64_t fake_shape = {0};
 
@@ -45,7 +44,7 @@ tvm_crt_error_t tvm_runtime_run(const tvm_model_t* model, void** inputs, void** 
 
   for (int i = 0; i < model->num_input_tensors; i++) {
     tensors[i] = (DLTensor){
-        .ctx = fake_ctx,
+        .device = fake_dev,
         .data = inputs[i],
         .shape = &fake_shape,
         .ndim = fake_dims,
@@ -57,7 +56,7 @@ tvm_crt_error_t tvm_runtime_run(const tvm_model_t* model, void** inputs, void** 
 
   for (int i = 0; i < model->num_output_tensors; i++) {
     tensors[model->num_input_tensors + i] = (DLTensor){
-        .ctx = fake_ctx,
+        .device = fake_dev,
         .data = outputs[i],
         .shape = &fake_shape,
         .ndim = fake_dims,
@@ -85,7 +84,7 @@ void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t nbytes, 
   return current_alloc;
 }
 
-tvm_crt_error_t TVMBackendFreeWorkspace(int device_type, int device_id, void* ptr) {
+int TVMBackendFreeWorkspace(int device_type, int device_id, void* ptr) {
   tvm_runtime_workspace->next_alloc = ptr;
   return 0;
 }

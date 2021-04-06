@@ -23,6 +23,7 @@ import numpy as np
 import pathlib
 import shutil
 import subprocess
+import sys
 import tempfile
 import tarfile
 
@@ -37,6 +38,8 @@ from tvm.contrib import utils
 from tvm.contrib import graph_runtime
 from tvm.micro import export_model_library_format
 from tvm.relay import testing
+
+import pytest
 
 from infra import *
 
@@ -87,7 +90,8 @@ def test_add_with_params():
     output_list = generate_ref_data(func, inputs, params)
 
     input_list = [y_in]
-    verify_source(func, input_list, output_list, params)
+    with utils.TempDirectory.set_keep_for_debug():
+        verify_source(func, input_list, output_list, params)
 
 
 def test_conv2d():
@@ -244,15 +248,4 @@ def test_mobilenet():
 
 
 if __name__ == "__main__":
-    test_tuple_output()
-    test_mobilenet()
-    test_subtract()
-    test_mul_param()
-    test_id()
-    test_add_const()
-    test_tuple_getitem()
-    test_nested_tuples()
-    test_concatenate()
-    test_conv_with_params()
-    test_add_with_params()
-    test_conv2d()
+    sys.exit(pytest.main([__file__] + sys.argv[1:]))

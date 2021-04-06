@@ -42,7 +42,7 @@ from tvm.relay.op.contrib import get_pattern_table
 from tvm.contrib import utils
 from tvm.relay.backend import compile_engine
 from tvm.contrib import utils
-from tvm.contrib import graph_runtime
+from tvm.contrib import graph_executor
 from tvm.micro import export_model_library_format
 
 
@@ -155,6 +155,7 @@ def verify_source(mod, input_list, output_list, params=None):
         lib = tvm.relay.build(mod, target, target_host=target, params=params)
 
     tmp_path = utils.tempdir()
+    print('tmp path', tmp_path.temp_dir)
     tmp_dir = tmp_path.temp_dir
 
     base_path = os.path.join(tmp_dir, "test")
@@ -205,7 +206,7 @@ def generate_ref_data(mod, input_data, params=None, target="llvm"):
     lib_path = temp.relpath(lib_name)
     lib.export_library(lib_path)
     lib = tvm.runtime.load_module(lib_path)
-    grt_mod = graph_runtime.GraphModule(lib["default"](tvm.cpu()))
+    grt_mod = graph_executor.GraphModule(lib["default"](tvm.cpu()))
     grt_mod.set_input(**input_data)
     grt_mod.run()
     output_count = grt_mod.get_num_outputs()

@@ -52,8 +52,8 @@
 
 #include <stdint.h>
 
+#include <tvm/runtime/crt/error_codes.h>
 #include "tvm_backend.h"
-#include "tvm_error.h"
 
 #ifdef __cplusplus
 extern "C" {

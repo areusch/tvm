@@ -42,7 +42,7 @@ class GraphExecutorFactoryModule:
     """
 
     def __init__(self, ir_mod, target, graph_str, libmod, libmod_name, params):
-        assert isinstance(graph_json_str, string_types)
+        assert isinstance(graph_str, string_types)
         fcreate = get_global_func("tvm.graph_executor_factory.create")
         args = []
         for k, v in params.items():

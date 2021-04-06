@@ -30,7 +30,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "tvm_error.h"
+#include <tvm/runtime/c_backend_api.h>
+#include <tvm/runtime/crt/error_codes.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,16 +42,7 @@ extern "C" {
 #define TVM_RUNTIME_ALLOC_ALIGNMENT 16
 #endif
 
-/*! The AOT runtime links staticly */
 #define TVM_DLL
-
-/*!
- * \brief Minimal TVMValue
- */
-typedef union {
-  int64_t v_int64; /** Currently used for parameter lookup */
-  void* v_handle;  /** Pointer to other values */
-} TVMValue;
 
 /*!
  * \brief Packed function signature definition
@@ -66,36 +58,6 @@ typedef struct {
   uint8_t* workspace;    /** Pointer to start of the workspace */
   size_t workspace_size; /** Total number of bytes in the workspace */
 } tvm_workspace_t;
-
-/**
- * \brief Backend function to allocate temporal workspace.
- *
- * \note The result allocated space is ensured to be aligned to TVM_RUNTIME_ALLOC_ALIGNMENT.
- * \note Currently matches CRT runtime signature but this will change in future to accommodate
- * memory planning
- *
- * \param device_type Ignored
- * \param device_id Ignored
- * \param nbytes The size of the space requested.
- * \param dtype_code_hint Ignored
- * \param dtype_bits_hint Ignored
- * \return void* NULL on error, a valid pointer on success
- */
-void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t nbytes, int dtype_code_hint,
-                               int dtype_bits_hint);
-
-/*!
- * \brief Backend function to free temporal workspace.
- *
- * \note Currently matches CRT runtime signature but this will change in future to accomodate memory
- * planning
- *
- * \param ptr The result allocated space pointer.
- * \param device_type Ignored
- * \param device_id Ignored
- * \return tvm_crt_error_t Containing any error statuses
- */
-tvm_crt_error_t TVMBackendFreeWorkspace(int device_type, int device_id, void* ptr);
 
 #ifdef __cplusplus
 }  // extern "C"

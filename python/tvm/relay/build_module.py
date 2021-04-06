@@ -246,8 +246,8 @@ def build(ir_mod, target=None, target_host=None, params=None, mod_name="default"
     Returns
     -------
     graph : str
-        The string representation of the graph. When using the 
-        graph-executor this is represents json string that can be 
+        The string representation of the graph. When using the
+        graph-executor this is represents json string that can be
         accepted by the executor.
 
     mod : tvm.Module
@@ -292,7 +292,7 @@ def build(ir_mod, target=None, target_host=None, params=None, mod_name="default"
 
         graph, runtime_mod, params = bld_mod.build(mod=ir_mod, target=target, params=params)
         executor_factory = _graph_executor_factory.GraphExecutorFactoryModule(
-            ir_mod, target, graph_json, runtime_mod, mod_name, params
+            ir_mod, target, graph, runtime_mod, mod_name, params
         )
         return executor_factory
 
