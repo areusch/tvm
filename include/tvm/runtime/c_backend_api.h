@@ -28,27 +28,11 @@
 #ifndef TVM_RUNTIME_C_BACKEND_API_H_
 #define TVM_RUNTIME_C_BACKEND_API_H_
 
-#include <tvm/runtime/c_runtime_api.h>
+#include <tvm/runtime/function_attributes.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/*!
- * \brief Signature for backend functions exported as DLL.
- *
- * \param args The arguments
- * \param type_codes The type codes of the arguments
- * \param num_args Number of arguments.
- * \param out_ret_value The output value of the the return value.
- * \param out_ret_tcode The output type code of the return value.
- * \param resource_handle Pointer to associated resource.
- *
- * \return 0 if success, -1 if failure happens, set error via TVMAPISetLastError.
- */
-typedef int (*TVMBackendPackedCFunc)(TVMValue* args, int* type_codes, int num_args,
-                                     TVMValue* out_ret_value, int* out_ret_tcode,
-                                     void* resource_handle);
 
 /*!
  * \brief Backend function for modules to get function
@@ -60,7 +44,7 @@ typedef int (*TVMBackendPackedCFunc)(TVMValue* args, int* type_codes, int num_ar
  * \param out The result function.
  * \return 0 when no error is thrown, -1 when failure happens
  */
-TVM_DLL int TVMBackendGetFuncFromEnv(void* mod_node, const char* func_name, TVMFunctionHandle* out);
+TVM_DLL int TVMBackendGetFuncFromEnv(void* mod_node, const char* func_name, void* out);
 
 /*!
  * \brief Backend function to register system-wide library symbol.
@@ -167,6 +151,7 @@ TVM_DLL int TVMBackendParallelBarrier(int task_id, TVMParallelGroupEnv* penv);
 TVM_DLL int TVMBackendRunOnce(void** handle, int (*f)(void*), void* cdata, int nbytes);
 
 #ifdef __cplusplus
-}  // TVM_EXTERN_C
+}  // extern "C"
 #endif
+
 #endif  // TVM_RUNTIME_C_BACKEND_API_H_

@@ -41,29 +41,8 @@
 #ifndef TVM_RUNTIME_C_RUNTIME_API_H_
 #define TVM_RUNTIME_C_RUNTIME_API_H_
 
-// Macros to do weak linking
-#ifdef _MSC_VER
-#define TVM_WEAK __declspec(selectany)
-#else
-#define TVM_WEAK __attribute__((weak))
-#endif
-
-#ifdef __EMSCRIPTEN__
-#include <emscripten/emscripten.h>
-#define TVM_DLL EMSCRIPTEN_KEEPALIVE
-#endif
-
-#ifndef TVM_DLL
-#ifdef _WIN32
-#ifdef TVM_EXPORTS
-#define TVM_DLL __declspec(dllexport)
-#else
-#define TVM_DLL __declspec(dllimport)
-#endif
-#else
-#define TVM_DLL __attribute__((visibility("default")))
-#endif
-#endif
+#include <tvm/runtime/function_attributes.h>
+#include <tvm/runtime/c_packed_func.h>
 
 // TVM version
 #define TVM_VERSION "0.8.dev0"
@@ -77,87 +56,11 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-/*! \brief type of array index. */
-typedef int64_t tvm_index_t;
-
-/*! \brief Extension device types in TVM */
-typedef enum {
-  kDLAOCL = 5,
-  kDLSDAccel = 6,
-  kOpenGL = 11,
-  kDLMicroDev = 13,
-  kDLHexagon = 14,
-  kDLWebGPU = 15
-  // AddExtraTVMType which is not in DLPack here
-} TVMDeviceExtType;
-
-/*!
- * \brief The type code in used and only used in TVM FFI for argument passing.
- *
- * DLPack consistency:
- * 1) kTVMArgInt is compatible with kDLInt
- * 2) kTVMArgFloat is compatible with kDLFloat
- * 3) kDLUInt is not in ArgTypeCode, but has a spared slot
- *
- * Downstream consistency:
- * The kDLInt, kDLUInt, kDLFloat are kept consistent with the original ArgType code
- *
- * It is only used in argument passing, and should not be confused with
- * DataType::TypeCode, which is DLPack-compatible.
- *
- * \sa tvm::runtime::DataType::TypeCode
- */
-typedef enum {
-  kTVMArgInt = kDLInt,
-  kTVMArgFloat = kDLFloat,
-  kTVMOpaqueHandle = 3U,
-  kTVMNullptr = 4U,
-  kTVMDataType = 5U,
-  kDLDevice = 6U,
-  kTVMDLTensorHandle = 7U,
-  kTVMObjectHandle = 8U,
-  kTVMModuleHandle = 9U,
-  kTVMPackedFuncHandle = 10U,
-  kTVMStr = 11U,
-  kTVMBytes = 12U,
-  kTVMNDArrayHandle = 13U,
-  kTVMObjectRValueRefArg = 14U,
-  // Extension codes for other frameworks to integrate TVM PackedFunc.
-  // To make sure each framework's id do not conflict, use first and
-  // last sections to mark ranges.
-  // Open an issue at the repo if you need a section of code.
-  kTVMExtBegin = 15U,
-  kTVMNNVMFirst = 16U,
-  kTVMNNVMLast = 20U,
-  // The following section of code is used for non-reserved types.
-  kTVMExtReserveEnd = 64U,
-  kTVMExtEnd = 128U,
-} TVMArgTypeCode;
-
 /*! \brief the array handle */
 typedef DLTensor* TVMArrayHandle;
 
-/*!
- * \brief Union type of values
- *  being passed through API and function calls.
- */
-typedef union {
-  int64_t v_int64;
-  double v_float64;
-  void* v_handle;
-  const char* v_str;
-  DLDataType v_type;
-  DLDevice v_device;
-} TVMValue;
-
-/*!
- * \brief Byte array type used to pass in byte array
- *  When kTVMBytes is used as data type.
- */
-typedef struct {
-  const char* data;
-  size_t size;
-} TVMByteArray;
+/*! \brief type of array index. */
+typedef int64_t tvm_index_t;
 
 /*! \brief Handle to TVM runtime modules. */
 typedef void* TVMModuleHandle;
@@ -172,13 +75,6 @@ typedef void* TVMRetValueHandle;
 typedef void* TVMStreamHandle;
 /*! \brief Handle to Object. */
 typedef void* TVMObjectHandle;
-
-/*!
- * \brief Used for implementing C API function.
- *  Set last error message before return.
- * \param msg The error message to be set.
- */
-TVM_DLL void TVMAPISetLastError(const char* msg);
 
 /*!
  * \brief return str message of the last error
@@ -606,6 +502,7 @@ TVM_DLL int TVMObjectDerivedFrom(uint32_t child_type_index, uint32_t parent_type
                                  int* is_derived);
 
 #ifdef __cplusplus
-}  // TVM_EXTERN_C
+}  // extern "C"
 #endif
+
 #endif  // TVM_RUNTIME_C_RUNTIME_API_H_
