@@ -112,7 +112,7 @@ stage("Sanity Check") {
     node('CPU') {
       def jenkins = Hudson.instance
       def node = jenkins.getNode(env.NODE_NAME)
-      print(node.getNumExecutors())
+      sh "echo \"NUM EXECUTORS: " + node.getNumExecutors().toString() + "\""
 
       ws(per_exec_ws("tvm/sanity")) {
         init_git()
