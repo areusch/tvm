@@ -102,6 +102,7 @@ def test_compile_runtime_llvm():
     """Test targeting the on-device runtime with the llvm backend."""
     global TARGET
     old_target = TARGET
+    assert False, "test failure :("
     try:
         # NOTE: test_compile_runtime uses the "c" backend--re run it using the llvm backend.
         target_str = str(TARGET)

@@ -117,6 +117,7 @@ def validate_graph_json(extract_dir, factory):
     ],
 )
 def test_export_model_library_format_c(executor, target, should_generate_interface):
+    assert False, "test failure :("
     with utils.TempDirectory.set_keep_for_debug(True):
         with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}):
             relay_mod = tvm.parser.fromtext(
