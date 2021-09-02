@@ -1,4 +1,5 @@
-#!/bin/bash
+#/bin/bash -eux
+#
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -16,28 +17,26 @@
 # specific language governing permissions and limitations
 # under the License.
 
-set -e
-set -u
-set -x
-set -o pipefail
+set -eux
 
-if [ $# -eq 0 ]; then
-    echo "usage: $0 <requirements_glob> [<requirements_glob> ...]"
+if [ "$#" -ne 1 ]; then
+    echo "usage: $0 <output_base>"
     exit 2
 fi
 
 SCRIPT_DIR="$(pwd)/$(dirname "$0")"
+DEPS_VENV="${SCRIPT_DIR}/poetry-venv"
+python3 -mvenv "${DEPS_VENV}"
 
-pip3 install -U pip
+# NOTE: install pip separately to work around poetry bug.
+#"${DEPS_VENV}/bin/pip" install -U pip
+#"${DEPS_VENV}/bin/pip" install -U poetry
 
-# NOTE: dependencies already handled by poetry.
-PIP_ARGS=( pip3 install --no-deps )
-SCRIPT_DIR="$(dirname "$0")"
-for piece in "$@"; do
-    piece_files=$(ls -1 $piece)
-    for file_name in ${piece_files}; do
-        PIP_ARGS+=( -r "${file_name}" )
-    done
-done
 
-"${PIP_ARGS[@]}"
+cd "${SCRIPT_DIR}"
+cd "$(git rev-parse --show-toplevel)"
+#python3 python/gen_requirements.py --modify-pyproject-toml pyproject.toml
+export LC_ALL=C.UTF-8
+#"${DEPS_VENV}/bin/poetry" lock -vv
+
+python3 python/export_constraints.py --output-base "$1"

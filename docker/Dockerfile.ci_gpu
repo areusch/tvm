@@ -37,58 +37,70 @@ RUN bash /install/ubuntu1804_install_llvm.sh
 COPY install/ubuntu_install_opencl.sh /install/ubuntu_install_opencl.sh
 RUN bash /install/ubuntu_install_opencl.sh
 
-COPY install/ubuntu_install_python_package.sh /install/ubuntu_install_python_package.sh
-RUN bash /install/ubuntu_install_python_package.sh
+# DL frameworks (non-python dependencies)
+COPY install/ubuntu_install_darknet.sh /install/ubuntu_install_darknet.sh
+RUN bash /install/ubuntu_install_darknet.sh
 
-COPY install/ubuntu_install_sphinx.sh /install/ubuntu_install_sphinx.sh
-RUN bash /install/ubuntu_install_sphinx.sh
+# Installs all python packages. Do not install python packages elsewhere!
+COPY install/ubuntu_install_python_package.sh /install/ubuntu_install_python_package.sh
+RUN mkdir /install/freeze-deps
+COPY freeze-deps/x86_64-*.txt /install/freeze-deps/
+# NOTE: for GPU container, install all pieces.
+RUN bash /install/ubuntu_install_python_package.sh /install/freeze-deps/*.txt
+
+# Post-install steps for DL Frameworks
+COPY install/ubuntu_install_caffe2.sh /install/ubuntu_install_caffe2.sh
+RUN bash /install/ubuntu_install_caffe2.sh
+
+#COPY install/ubuntu_install_sphinx.sh /install/ubuntu_install_sphinx.sh
+#RUN bash /install/ubuntu_install_sphinx.sh
 
 # Enable doxygen for c++ doc build
 RUN apt-get update && apt-get install -y doxygen libprotobuf-dev protobuf-compiler
 
-COPY install/ubuntu_install_java.sh /install/ubuntu_install_java.sh
-RUN bash /install/ubuntu_install_java.sh
+#COPY install/ubuntu_install_java.sh /install/ubuntu_install_java.sh
+#RUN bash /install/ubuntu_install_java.sh
 
-COPY install/ubuntu_install_nodejs.sh /install/ubuntu_install_nodejs.sh
-RUN bash /install/ubuntu_install_nodejs.sh
+#COPY install/ubuntu_install_nodejs.sh /install/ubuntu_install_nodejs.sh
+#RUN bash /install/ubuntu_install_nodejs.sh
 
-COPY install/ubuntu_install_rocm.sh /install/ubuntu_install_rocm.sh
-RUN bash /install/ubuntu_install_rocm.sh
+#COPY install/ubuntu_install_rocm.sh /install/ubuntu_install_rocm.sh
+#RUN bash /install/ubuntu_install_rocm.sh
 
 # DL Frameworks
-COPY install/ubuntu_install_mxnet.sh /install/ubuntu_install_mxnet.sh
-RUN bash /install/ubuntu_install_mxnet.sh
+# python only
+#COPY install/ubuntu_install_mxnet.sh /install/ubuntu_install_mxnet.sh
+#RUN bash /install/ubuntu_install_mxnet.sh
 
-COPY install/ubuntu_install_gluoncv.sh /install/ubuntu_install_gluoncv.sh
-RUN bash /install/ubuntu_install_gluoncv.sh
+#py only
+#COPY install/ubuntu_install_gluoncv.sh /install/ubuntu_install_gluoncv.sh
+#RUN bash /install/ubuntu_install_gluoncv.sh
 
-COPY install/ubuntu_install_coreml.sh /install/ubuntu_install_coreml.sh
-RUN bash /install/ubuntu_install_coreml.sh
+#py only
+#COPY install/ubuntu_install_coreml.sh /install/ubuntu_install_coreml.sh
+#RUN bash /install/ubuntu_install_coreml.sh
 
-COPY install/ubuntu_install_tensorflow.sh /install/ubuntu_install_tensorflow.sh
-RUN bash /install/ubuntu_install_tensorflow.sh
+# py only
+#COPY install/ubuntu_install_tensorflow.sh /install/ubuntu_install_tensorflow.sh
+#RUN bash /install/ubuntu_install_tensorflow.sh
 
-COPY install/ubuntu_install_darknet.sh /install/ubuntu_install_darknet.sh
-RUN bash /install/ubuntu_install_darknet.sh
-
-COPY install/ubuntu_install_onnx.sh /install/ubuntu_install_onnx.sh
-RUN bash /install/ubuntu_install_onnx.sh
+#py only
+#COPY install/ubuntu_install_onnx.sh /install/ubuntu_install_onnx.sh
+#RUN bash /install/ubuntu_install_onnx.sh
 
 COPY install/ubuntu_install_tflite.sh /install/ubuntu_install_tflite.sh
 RUN bash /install/ubuntu_install_tflite.sh
 
-COPY install/ubuntu_install_caffe2.sh /install/ubuntu_install_caffe2.sh
-RUN bash /install/ubuntu_install_caffe2.sh
-
-COPY install/ubuntu_install_dgl.sh /install/ubuntu_install_dgl.sh
-RUN bash /install/ubuntu_install_dgl.sh
+# py only
+# COPY install/ubuntu_install_dgl.sh /install/ubuntu_install_dgl.sh
+# RUN bash /install/ubuntu_install_dgl.sh
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,graphics,utility
 COPY install/ubuntu_install_vulkan.sh /install/ubuntu_install_vulkan.sh
 RUN bash /install/ubuntu_install_vulkan.sh
 
-COPY install/ubuntu_install_paddle.sh /install/ubuntu_install_paddle.sh
-RUN bash /install/ubuntu_install_paddle.sh
+#COPY install/ubuntu_install_paddle.sh /install/ubuntu_install_paddle.sh
+#RUN bash /install/ubuntu_install_paddle.sh
 
 # Rust env (build early; takes a while)
 COPY install/ubuntu_install_rust.sh /install/ubuntu_install_rust.sh
