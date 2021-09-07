@@ -65,6 +65,7 @@ PrimFunc MakeUnpackedAPI(PrimFunc&& func) {
   Array<Var> args;
   std::vector<std::pair<Var, Var>> var_def;
   std::vector<std::pair<Var, Buffer>> buffer_def;
+  Map<Var, Var> runtime_param_map;
 
   for (int i = 0; i < static_cast<int>(func_ptr->params.size()); ++i) {
     Var param = func_ptr->params[i];
@@ -78,6 +79,7 @@ PrimFunc MakeUnpackedAPI(PrimFunc&& func) {
     }
 
     args.push_back(v_arg);
+    runtime_param_map.Set(param, v_arg);
   }
 
   // Bind variables then bind buffers to them to ensure correct ordering
@@ -96,6 +98,7 @@ PrimFunc MakeUnpackedAPI(PrimFunc&& func) {
   func_ptr->body = MergeNest({device_init, binder.init_nest(), binder.asserts()}, func_ptr->body);
   func_ptr->params = args;
   func_ptr->ret_type = PrimType(DataType::Int(32));
+  func_ptr->attrs.CopyOnWrite()->dict.Set(tir::attr::kRuntimeParamMap, runtime_param_map);
 
   // return the function.
   return std::move(func);

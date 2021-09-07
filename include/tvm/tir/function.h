@@ -287,6 +287,14 @@ constexpr const char* kIsEntryFunc = "tir.is_entry_func";
  */
 constexpr const char* kLinkedParams = "tir.linked_params";
 
+/*!
+ * \brief Contains a map from the original parameter names passed to build() to the packed and
+ * unpacked function parameter names used at runtime.
+ *
+ * Type: Map<Var, Var>
+ */
+constexpr const char* kRuntimeParamMap = "tir.RuntimeParamMap";
+
 }  // namespace attr
 }  // namespace tir
 }  // namespace tvm
