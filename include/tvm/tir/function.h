@@ -296,6 +296,14 @@ constexpr const char* kLinkedParams = "tir.linked_params";
  */
 constexpr const char* kIsGlobalFunc = "tir.is_global_func";
 
+/*
+ * \brief Contains a map from the original parameter names passed to build() to the packed and
+ * unpacked function parameter names used at runtime.
+ *
+ * Type: Map<Var, Var>
+ */
+constexpr const char* kRuntimeParamMap = "tir.RuntimeParamMap";
+
 }  // namespace attr
 }  // namespace tir
 }  // namespace tvm
