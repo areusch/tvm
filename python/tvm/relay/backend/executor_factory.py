@@ -93,22 +93,17 @@ class AOTExecutorFactoryModule(ExecutorFactoryModule):
         List of devices used in the module
     """
 
-    def __init__(
-        self,
-        ir_mod,
-        lowered_ir_mods,
-        target,
-        executor,
-        libmod,
-        libmod_name,
-        params,
-        function_metadata,
-        devices,
-    ):
+    def __init__(self, ir_mod, target, libmod, libmod_name, params, function_metadata):
+        fcreate = get_global_func("tvm.graph_executor_factory.create")
+        args = []
+        for k, v in params.items():
+            args.append(k)
+            args.append(ndarray.array(v))
+
         self.ir_mod = ir_mod
         self.lowered_ir_mods = lowered_ir_mods
         self.target = target
-        self.executor = executor
+        self.module = fcreate(graph_json_str, libmod, libmod_name, str(target), *args)
         self.lib = libmod
         self.libmod_name = libmod_name
         self.params = params

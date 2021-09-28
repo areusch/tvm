@@ -17,11 +17,13 @@
 import tvm
 import tvm.testing
 from tvm import te, runtime
-import numpy as np
-import json
 from tvm import rpc
 from tvm import relay
 from tvm.contrib import utils, graph_executor
+
+import json
+import numpy as np
+import pytest
 
 
 @tvm.testing.requires_llvm
@@ -139,5 +141,4 @@ def test_load_unexpected_params():
 
 
 if __name__ == "__main__":
-    test_graph_simple()
-    test_load_unexpected_params()
+    sys.exit(pytest.main([__file__] + sys.argv[1:]))
