@@ -342,9 +342,14 @@ class AOTExecutorCodegen : public MixedModeVisitor {
     }
 
     // Use tvm_call_packed to execute the function unless we're calling directly
-    auto calling_pattern = tvm::tir::builtin::tvm_call_cpacked();
+    Op calling_pattern;
     if (use_unpacked_api_) {
       calling_pattern = tvm::tir::builtin::call_extern();
+    } else {
+      calling_pattern =
+        target_host_->GetAttr<String>("runtime").value_or(kTvmRuntimeCpp) == kTvmRuntimeCrt ?
+        tvm::tir::builtin::tvm_call_cpacked() :
+        tvm::tir::builtin::tvm_call_packed();
     }
 
     GlobalVar global_var = call_lowered_props.lowered_func;
