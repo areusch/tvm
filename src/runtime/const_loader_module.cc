@@ -43,12 +43,12 @@ namespace runtime {
 
 /*!
  * \brief The metadata module is designed to manage initialization of the
- * imported submodules.
+ * imported submodules for the C++ runtime.
  */
-class MetadataModuleNode : public ModuleNode {
+class ConstLoaderModuleNode : public ModuleNode {
  public:
-  MetadataModuleNode(const std::unordered_map<std::string, NDArray>& metadata,
-                     const std::unordered_map<std::string, std::vector<std::string>>& sym_vars)
+  ConstLoaderModuleNode(const std::unordered_map<std::string, NDArray>& metadata,
+                        const std::unordered_map<std::string, std::vector<std::string>>& sym_vars)
       : metadata_(metadata), sym_vars_(sym_vars) {
     // Only the related submodules are cached to reduce the number of runtime
     // symbol lookup for initialization. Otherwise, symbols/primitives in the
@@ -78,7 +78,7 @@ class MetadataModuleNode : public ModuleNode {
     return PackedFunc(nullptr);
   }
 
-  const char* type_key() const { return "metadata"; }
+  const char* type_key() const { return "const_loader"; }
 
   /*!
    * \brief Get the list of metadata that is required by the given module.
@@ -102,7 +102,7 @@ class MetadataModuleNode : public ModuleNode {
    * for runtime lookup.
    *
    * \note  A module could be like the following:
-   *  MetadataModuleNode (contains all the metadata)
+   *  ConstLoaderModuleNode (contains all the metadata)
    *    - CSourceModule
    *    - JSON runtime module
    *
@@ -201,7 +201,7 @@ class MetadataModuleNode : public ModuleNode {
       sym_vars[symbols[i]] = const_vars[i];
     }
 
-    auto n = make_object<MetadataModuleNode>(metadata, sym_vars);
+    auto n = make_object<ConstLoaderModuleNode>(metadata, sym_vars);
     return Module(n);
   }
 
@@ -217,14 +217,16 @@ class MetadataModuleNode : public ModuleNode {
   std::unordered_map<std::string, std::vector<std::string>> sym_vars_;
 };
 
-Module MetadataModuleCreate(
+Module ConstLoaderModuleCreate(
     const std::unordered_map<std::string, NDArray>& metadata,
     const std::unordered_map<std::string, std::vector<std::string>>& sym_vars) {
-  auto n = make_object<MetadataModuleNode>(metadata, sym_vars);
+  auto n = make_object<ConstLoaderModuleNode>(metadata, sym_vars);
   return Module(n);
 }
 
 TVM_REGISTER_GLOBAL("runtime.module.loadbinary_metadata")
-    .set_body_typed(MetadataModuleNode::LoadFromBinary);
+    .set_body_typed(ConstLoaderModuleNode::LoadFromBinary);
+TVM_REGISTER_GLOBAL("runtime.module.loadbinary_const_loader")
+    .set_body_typed(ConstLoaderModuleNode::LoadFromBinary);
 }  // namespace runtime
 }  // namespace tvm
