@@ -86,8 +86,15 @@ class AOTExecutorFactoryModule(ExecutorFactoryModule):
     """
 
     def __init__(self, ir_mod, target, libmod, libmod_name, params, function_metadata):
+        fcreate = get_global_func("tvm.graph_executor_factory.create")
+        args = []
+        for k, v in params.items():
+            args.append(k)
+            args.append(ndarray.array(v))
+
         self.ir_mod = ir_mod
         self.target = target
+        self.module = fcreate(graph_json_str, libmod, libmod_name, str(target), *args)
         self.lib = libmod
         self.libmod_name = libmod_name
         self.params = params

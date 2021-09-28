@@ -72,7 +72,7 @@ class TVM_DLL GraphExecutor : public ModuleNode {
 
  public:
   /*!
-   * \brief Get member function to front-end
+   * \brief Implements member function lookup for this Module for the frontend.
    * \param name The name of the function.
    * \param sptr_to_self The pointer to the module node.
    * \return The corresponding member function.
