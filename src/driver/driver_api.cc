@@ -516,6 +516,7 @@ runtime::Module build(const Map<Target, IRModule>& inputs_arg, const Target& tar
 
   ICHECK(mhost_all.defined()) << "The host module must be defined";
 
+  LOG(INFO) << "INPUTS " << inputs;
   for (const auto& it : inputs) {
     if (it.second.defined()) {
       const Target& target = it.first;
@@ -608,6 +609,7 @@ transform::Sequential MixedModulePassManager(IRModule mixed_mod, Target target) 
   mixed_pass_list.push_back(tir::transform::InferFragment());
   mixed_pass_list.push_back(tir::transform::LowerThreadAllreduce());
 
+  LOG(INFO) << "unpacked? " << target->GetAttr<Bool>("unpacked-api").value_or(Bool(false));
   if (target->GetAttr<Bool>("unpacked-api").value_or(Bool(false))) {
     mixed_pass_list.push_back(tir::transform::MakeUnpackedAPI());
   } else {

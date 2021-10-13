@@ -490,6 +490,7 @@ class RelayBuildModule : public runtime::ModuleNode {
     }
 
     // When there is no lowered_funcs due to reasons such as optimization.
+    LOG(INFO) << "LOWERED " << lowered_funcs.size();
     if (lowered_funcs.size() == 0) {
       if (target_host.defined() && target_host->kind->name == "llvm") {
         // If we can decide the target is LLVM, we then create an empty LLVM module.
