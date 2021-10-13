@@ -199,14 +199,14 @@ def parametrize_aot_options(test):
     )
 
     interface_api = ["packed", "c"]
-    use_unpacked_api = [True, False]
+    arg_passing_style = ["packed_args", "unpacked_args"]
     test_runner = [AOT_DEFAULT_RUNNER, AOT_CORSTONE300_RUNNER]
 
-    all_combinations = itertools.product(interface_api, use_unpacked_api, test_runner)
+    all_combinations = itertools.product(interface_api, arg_passing_style, test_runner)
 
     # Filter out packed operators with c interface
     valid_combinations = filter(
-        lambda parameters: not (parameters[0] == "c" and not parameters[1]),
+        lambda parameters: not (parameters[0] == "c" and parameters == "packed_args"),
         all_combinations,
     )
 
@@ -214,7 +214,7 @@ def parametrize_aot_options(test):
     valid_combinations = filter(
         lambda parameters: not (
             parameters[2] == AOT_CORSTONE300_RUNNER
-            and (parameters[0] == "packed" or not parameters[1])
+            and (parameters[0] == "packed_api" or parameters == "packed_args")
         ),
         valid_combinations,
     )
@@ -228,7 +228,7 @@ def parametrize_aot_options(test):
     )
 
     return pytest.mark.parametrize(
-        ["interface_api", "use_unpacked_api", "test_runner"],
+        ["interface_api", "arg_passing_style", "test_runner"],
         marked_combinations,
     )(test)
 
@@ -545,7 +545,7 @@ def extract_main_workspace_size_bytes(extract_dir):
 def compile_models(
     models: Union[List[AOTTestModel], AOTTestModel],
     interface_api: str,
-    use_unpacked_api: bool,
+    arg_passing_style: str,
     workspace_byte_alignment: int = 8,
     enable_op_fusion: bool = True,
     pass_config: Dict[str, Any] = None,
@@ -557,7 +557,9 @@ def compile_models(
         models = [models]
 
     base_target = "c -runtime=c --link-params --executor=aot"
-    extra_target = f"--workspace-byte-alignment={workspace_byte_alignment} --interface-api={interface_api} --unpacked-api={int(use_unpacked_api)}"
+    extra_target = (f"--workspace-byte-alignment={workspace_byte_alignment} "
+                    f"--interface-api={interface_api} "
+                    f"--unpacked-api={int(arg_passing_style == 'unpacked_args')}")
     target = f"{base_target} {extra_target}"
 
     config = {"tir.disable_vectorize": True}
