@@ -704,11 +704,18 @@ class AOTExecutorCodegen : public MixedModeVisitor {
       ret.lowered_funcs.Set(target_host_, mod_run);
     }
 
-    std::vector<String> input_var_names(input_vars_.size());
-    std::transform(input_vars_.begin(), input_vars_.end(), input_var_names.begin(),
-                   [](Var input_var) -> String { return input_var->name_hint(); });
+    Array<String> input_var_names;
+    Array<ShapeTuple> input_var_shapes;
+    std::vector<DLDataType> input_var_dtypes(input_vars_.size());
+    for (unsigned int i = 0; i < input_vars_.size(); ++i) {
+      input_var_names.push_back(input_vars_[i]->name_hint());
+      auto ttype = Downcast<TensorType>(input_vars_[i]->type_annotation);
+      input_var_shapes.push_back(ShapeTuple(ShapeToJSON(ttype->shape)));
+      input_var_dtypes[i] = ttype->dtype.operator DLDataType();
+    }
     ret.metadata =
-        runtime::Metadata(input_var_names, return_sid_.size(), runtime::kTvmExecutorAot, mod_name);
+      runtime::Metadata(input_var_names, input_var_shapes, input_var_dtypes,
+                        return_sid_.size(), runtime::kTvmExecutorAot, mod_name);
     return ret;
   }
 };
