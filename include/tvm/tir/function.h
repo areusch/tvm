@@ -187,6 +187,40 @@ class LinkedParam : public ObjectRef {
   TVM_DEFINE_OBJECT_REF_COW_METHOD(LinkedParamNode);
 };
 
+class ArgumentMappingNode : public Object {
+public:
+  /*! \brief Relay argument name */
+  std::string relay_name;
+
+  /*! \brief TIR argument name, empty if unused */
+  std::string tir_name;
+
+  /*! \brief Data type of this argument */
+  DataType dtype;
+
+  /*! \brief Shape of this argument */
+  Array<PrimExpr> shape;
+
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("relay_name", &relay_name);
+    v->Visit("tir_name", &tir_name);
+    v->Visit("dtype", &dtype);
+    v->Visit("shape", &shape);
+  }
+};
+
+
+/*!
+ * \brief Managed reference to ArgumentMappingNode.
+ */
+class ArgumentMapping : public ObjectRef {
+ public:
+  TVM_DLL ArgumentMapping(std::string relay_name, std::string tir_name, DataType dtype, Array<PrimExpr> shape);
+
+  TVM_DEFINE_OBJECT_REF_METHODS(ArgumentMapping, ObjectRef, ArgumentMappingNode);
+  TVM_DEFINE_OBJECT_REF_COW_METHOD(ArgumentMappingNode);
+};
+
 /*!
  * \brief Specialize parameters of PrimFunc.
  * \param func The PrimFunc to be specialized.
@@ -285,7 +319,7 @@ constexpr const char* kIsEntryFunc = "tir.is_entry_func";
  * Type: Map<String, LinkableParam>
  *
  * \note This should be present only on a function named
- *     tvm::target::packed_func::kLookupLinkedParam.
+ *     tvm::target::packed_func::kLookupLinkedParamp.
  */
 constexpr const char* kLinkedParams = "tir.linked_params";
 

@@ -35,6 +35,15 @@ LinkedParam::LinkedParam(int64_t id, ::tvm::runtime::NDArray param) {
   data_ = std::move(n);
 }
 
+ArgumentMapping::ArgumentMapping(std::string relay_name, std::string tir_name, DataType dtype, Array<PrimExpr> shape) {
+  auto n = make_object<ArgumentMappingNode>();
+  n->relay_name = relay_name;
+  n->tir_name = tir_name;
+  n->dtype = dtype;
+  n->shape = shape;
+  data_ = std::move(n);
+}
+
 // Get the function type of a PrimFunc
 PrimFunc::PrimFunc(Array<tir::Var> params, Stmt body, Type ret_type,
                    Map<tir::Var, Buffer> buffer_map, DictAttrs attrs, Span span) {
