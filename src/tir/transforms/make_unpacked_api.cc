@@ -65,7 +65,7 @@ PrimFunc MakeUnpackedAPI(PrimFunc&& func) {
   Array<Var> args;
   std::vector<std::pair<Var, Var>> var_def;
   std::vector<std::pair<Var, Buffer>> buffer_def;
-  Map<Var, Var> runtime_param_map;
+  Array<ArgumentMapping> runtime_param_map;
 
   for (int i = 0; i < static_cast<int>(func_ptr->params.size()); ++i) {
     Var param = func_ptr->params[i];
@@ -74,12 +74,13 @@ PrimFunc MakeUnpackedAPI(PrimFunc&& func) {
     auto it = func_ptr->buffer_map.find(param);
     if (it != func_ptr->buffer_map.end()) {
       buffer_def.emplace_back(v_arg, (*it).second);
+      runtime_param_map.push_back(ArgumentMapping(func_ptr->params[i]->name_hint, v_arg->name_hint, (*it).second->dtype, (*it).second->shape));
     } else {
       var_def.emplace_back(v_arg, param);
+      runtime_param_map.push_back(ArgumentMapping(func_ptr->params[i]->name_hint, v_arg->name_hint, (*it).second->dtype, (*it).second->shape));
     }
 
     args.push_back(v_arg);
-    runtime_param_map.Set(param, v_arg);
   }
 
   // Bind variables then bind buffers to them to ensure correct ordering
