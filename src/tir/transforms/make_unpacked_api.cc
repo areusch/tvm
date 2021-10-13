@@ -100,6 +100,8 @@ PrimFunc MakeUnpackedAPI(PrimFunc&& func) {
   func_ptr->params = args;
   func_ptr->ret_type = PrimType(DataType::Int(32));
   func_ptr->attrs.CopyOnWrite()->dict.Set(tir::attr::kRuntimeParamMap, runtime_param_map);
+  LOG(INFO) << "created attrs " << func_ptr->attrs;
+  LOG(INFO) << "created func " << func;
 
   // return the function.
   return std::move(func);
@@ -115,8 +117,10 @@ Pass MakeUnpackedAPI() {
     for (const auto& kv : mptr->functions) {
       if (auto* n = kv.second.as<PrimFuncNode>()) {
         PrimFunc func = GetRef<PrimFunc>(n);
+        LOG(INFO) << "do we make unpacked (" << kv.first << ")? " << func->GetAttr<Integer>(tvm::attr::kCallingConv, Integer(CallingConv::kDefault)) << " vs " << int(CallingConv::kDefault);
         if (func->GetAttr<Integer>(tvm::attr::kCallingConv, Integer(CallingConv::kDefault)) ==
             CallingConv::kDefault) {
+          LOG(INFO) << "Make unpacked";
           auto updated_func = MakeUnpackedAPI(std::move(func));
           updates.push_back({kv.first, updated_func});
         }

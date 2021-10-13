@@ -752,6 +752,7 @@ class AOTExecutorCodegen : public MixedModeVisitor {
           tec::UpdateFunctionMetadata(func, this->function_metadata_, workspace_byte_alignment);
         })(mod);
 
+
     auto lowered_main = lowered_mod->Lookup("main");
     auto lowered_main_func = GetRef<Function>(lowered_main.as<FunctionNode>());
 
@@ -798,6 +799,7 @@ class AOTExecutorCodegen : public MixedModeVisitor {
     // because the packed calls arguments are not wrapped in TVMValues. To make this happen we need
     // to run the LegalizePackedCalls pass.
     auto prim_func = CreateMainFunc(mod_name, lowered_main_func->params.size());
+    std::cout << "AOT FUNC " << prim_func;
     LoweredOutput ret;
 
     ret.params = std::unordered_map<std::string, std::pair<int, const tvm::runtime::NDArray>>();
