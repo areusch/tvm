@@ -25,46 +25,66 @@
 #ifndef TVM_TARGET_META_DATA_H_
 #define TVM_TARGET_META_DATA_H_
 
+#include <tvm/ir/expr.h>
+#include <tvm/runtime/container/array.h>
+#include <tvm/runtime/container/string.h>
 #include <tvm/runtime/object.h>
 
 namespace tvm {
 namespace codegen {
 namespace metadata {
 
-class MetadataBaseNode : public Object {
-  static constexpr const uint32_t _type_index = TypeIndex::kDynamic;
+class MetadataBaseNode : public ::tvm::runtime::Object {
+ public:
+  virtual void VisitAttrs(AttrVisitor* v) = 0;
+
+ private:
+  static constexpr const uint32_t _type_index = ::tvm::runtime::TypeIndex::kDynamic;
   static constexpr const char* _type_key = "codegen.metadata.MetadataBaseNode";
-  TVM_DECLARE_BASE_OBJECT_INFO(MetadataBase, Object);
+  TVM_DECLARE_BASE_OBJECT_INFO(MetadataBaseNode, Object);
+};
+
+template <int N>
+struct c_string {
+  const char data[N];
 };
 
 template <int N, int M>
-static constexpr const char[N + M - 1] constexpr_strcat(const char[N] a, const char[M] b) {
-                             return {a, b};
-                           }
+static constexpr c_string<N + M - 1> constexpr_strcat(const char a[N], const char b[M]) {
+  c_string<N + M - 1> c_str;
+  for (int i = 0; i < N - 1; ++i) {
+    c_str.data[i] = a[i];
+  }
+  static_assert(a[N - 1] == '\0');
+  for (int j = 0; j < M; ++j) {
+    c_str.data[N - 1 + j] = b[j];
+  }
+  return c_str;
+}
 
-template <typename T, std::enable_if<std::is_base_of<ObjectRef, T> > >
-class MetadataArrayNode : public Object {
+template <class T, std::enable_if_t<std::is_base_of<::tvm::runtime::ObjectRef, T>::value, bool> = true>
+class MetadataArrayNode : public ::tvm::runtime::Object {
  public:
-  Array<T> data;
+  ::tvm::runtime::Array<T> data;
 
   const char* get_element_type_key() {
     return T::_type_key;
   }
 
-  static constexpr const uint32_t _type_index = TypeIndex::kDynamic;
-  static constexpr const char* _type_key = constexpr_strcat("codegen.metadata.MetadataArray.", T::_type_key);
+  static constexpr const uint32_t _type_index = ::tvm::runtime::TypeIndex::kDynamic;
+  static constexpr const char* _type_key = constexpr_strcat("codegen.metadata.MetadataArray.", T::_type_key).data;
 };
 
-template <typename T, std::enable_if<std::is_base_of<ObjectRef, T> > >
-class MetadataArray : public ObjectRef {
+template <typename T, std::enable_if_t<std::is_base_of<::tvm::runtime::ObjectRef, T>::value, bool> = true>
+class MetadataArray : public ::tvm::runtime::ObjectRef {
 public:
-  TVM_DEFINE_OBJECT_REF_METHODS(MetadataArray<T>, ObjectRef, ArrayNode);
+  TVM_DEFINE_OBJECT_REF_METHODS(MetadataArray, ObjectRef, ArrayNode);
 };
 
-class MetadataBase : public ObjectRef {
+class MetadataBase : public ::tvm::runtime::ObjectRef {
  public:
   inline MetadataBaseNode* get_mutable() {
-    return ObjectRef::get_mutable();
+    return static_cast<MetadataBaseNode*>(ObjectRef::get_mutable());
   }
 
   TVM_DEFINE_OBJECT_REF_METHODS(MetadataBase, ObjectRef, MetadataBaseNode);
@@ -76,7 +96,7 @@ class ParameterInfoNode : public MetadataBaseNode {
   String tir_name_hint;
   MetadataArray<Integer> shape;
   Integer ndim;
-  DLDataType dtype;
+  DataType dtype;
 
   void VisitAttrs(AttrVisitor* v) override {
     v->Visit("relay_name_hint", &relay_name_hint);
@@ -86,16 +106,16 @@ class ParameterInfoNode : public MetadataBaseNode {
     v->Visit("dtype", &dtype);
   }
 
-  static constexpr const uint32_t _type_index = TypeIndex::kDynamic;
+  static constexpr const uint32_t _type_index = ::tvm::runtime::TypeIndex::kDynamic;
   static constexpr const char* _type_key = "codegen.metadata.ParameterInfoNode";
   TVM_DECLARE_BASE_OBJECT_INFO(ParameterInfoNode, MetadataBaseNode);
 };
 
-class ParameterInfo : public ObjectRef {
+class ParameterInfo : public ::tvm::runtime::ObjectRef {
   TVM_DEFINE_OBJECT_REF_METHODS(ParameterInfo, ObjectRef, ParameterInfoNode);
 };
 
-class FunctionInfoNode : public Object {
+class FunctionInfoNode : public ::tvm::runtime::Object {
  public:
   String function_name;
   MetadataArray<ParameterInfo> params;
@@ -109,16 +129,16 @@ class FunctionInfoNode : public Object {
     v->Visit("num_inputs", &num_inputs);
   }
 
-  static constexpr const uint32_t _type_index = TypeIndex::kDynamic;
+  static constexpr const uint32_t _type_index = ::tvm::runtime::TypeIndex::kDynamic;
   static constexpr const char* _type_key = "codegen.metadata.FunctionInfoNode";
   TVM_DECLARE_BASE_OBJECT_INFO(ParameterInfoNode, MetadataBaseNode);
 };
 
-class FunctionInfo : public ObjectRef {
+class FunctionInfo : public ::tvm::runtime::ObjectRef {
   TVM_DEFINE_OBJECT_REF_METHODS(FunctionInfo, ObjectRef, FunctionInfoNode);
 };
 
-class MetadataNode : public Object {
+class MetadataNode : public ::tvm::runtime::Object {
  public:
   Integer version;
   MetadataArray<FunctionInfo> functions;
@@ -132,12 +152,12 @@ class MetadataNode : public Object {
     v->Visit("target", &target);
   }
 
-  static constexpr const uint32_t _type_index = TypeIndex::kDynamic;
+  static constexpr const uint32_t _type_index = ::tvm::runtime::TypeIndex::kDynamic;
   static constexpr const char* _type_key = "codegen.metadata.MetadataNode";
   TVM_DECLARE_BASE_OBJECT_INFO(MetadataNode, MetadataBaseNode);
 };
 
-class Metadata : public ObjectRef {
+class Metadata : public ::tvm::runtime::ObjectRef {
   TVM_DEFINE_OBJECT_REF_METHODS(Metadata, ObjectRef, MetadataNode);
 };
 

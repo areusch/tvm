@@ -39,8 +39,6 @@
 #include <vector>
 
 #include "runtime_base.h"
-#include "c_meta_data.h"
-#include "../support/span.h"
 
 namespace tvm {
 namespace runtime {
