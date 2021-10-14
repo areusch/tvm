@@ -434,7 +434,7 @@ class MetadataStructDefiner : public AttrVisitor {
     if (arr != nullptr) {
       // dns: mangle name
 
-      code_ << "  " <<  " << key << ";" << std::endl;
+      code_ << "  " <<  "" << key << ";" << std::endl;
       WriteComma();
       code_ << "{";
       if (arr->size() > 0) {
