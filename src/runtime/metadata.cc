@@ -29,9 +29,6 @@ namespace tvm {
 namespace runtime {
 namespace metadata {
 
-std::string& StringNode::operator std::string() {
-  return std::string(data);
-}
 
 }  // namespace metadata
 }  // namespace runtime

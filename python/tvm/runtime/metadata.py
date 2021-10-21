@@ -159,9 +159,9 @@ class MetadataType:
             return f"{self.element_type.c_type}*"
         elif self.is_object:
             if self.is_element_type:
-                return f"const struct {self.python_type.__name__}"
+                return f"const struct TVM{self.python_type.__name__}"
             else:
-                return f"const struct {self.python_type.__name__}*"
+                return f"const struct TVM{self.python_type.__name__}*"
         else:
             raise TypeError(f"unknown type {self.python_type}")
 
@@ -174,7 +174,7 @@ class MetadataType:
         elif self.python_type is DataType:
             return "::tvm::runtime::DataType"
         elif self.is_array:
-            return f"::tvm::support::Span<{self.element_type.cpp_type}>"
+            return f"::tvm::support::Span<{self.element_type.cpp_type}, {self.element_type.cpp_type}>"
         elif self.is_object:
             if self.is_element_type:
                 return self.python_type.__name__
@@ -250,6 +250,7 @@ class Writer:
         self.scope_indent = scope_indent
 
     def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.fd = open(self.path, "w")
         return self
 
@@ -284,7 +285,7 @@ class Writer:
 
 
 def generate_struct(obj, writer):
-    with writer.scope(f"\nstruct {obj.__name__} {{", "};"):
+    with writer.scope(f"\nstruct TVM{obj.__name__} {{", "};"):
         for field in MetadataFields.from_metadata(obj):
             writer.write(f"{field.type.c_type} {field.name};")
 
@@ -295,7 +296,7 @@ def generate_struct(obj, writer):
 def generate_class(obj, header, impl):
     with header.scope(f"\nclass {obj.__name__}Node : public MetadataBaseNode {{", "};") as cls:
         cls.write(f"public:", adjust=-1)
-        cls.write(f"{obj.__name__}Node(const struct {obj.__name__}* data) : data_{{data}} {{}}")
+        cls.write(f"{obj.__name__}Node(const struct ::TVM{obj.__name__}* data) : data_{{data}} {{}}")
         metadata_fields = MetadataFields.from_metadata(obj)
         for field in metadata_fields:
             if field.type.is_array:
@@ -304,31 +305,32 @@ def generate_class(obj, header, impl):
                     with cls.scope(f"inline {field.type.cpp_type} {field.name}() const {{", "}") as func:
                       func.write(f"return {field.type.cpp_type}(data_->{field.name}, data_->{field.name} + data_->num_{field.name});")
                 else:
-                    with cls.scope(f"inline ArrayAccessor<{field.type.c_type}, {element_type.cpp_type}> {field.name}() const {{", "}") as func:
+                    cls.write(f"ArrayAccessor<{field.type.c_type}, {element_type.cpp_type}> {field.name}();")
+                    with impl.scope(f"ArrayAccessor<{field.type.c_type}, {element_type.cpp_type}> {obj.__name__}Node::{field.name}() {{", "}") as func:
                         func.write(
                             f"if ({field.name}_refs_.get() == nullptr) {{ {field.name}_refs_.reset(new ::std::vector<{element_type.cpp_type}>()); }}")
                         func.write(
-                            f"return ArrayAccessor<{field.type.c_type}, {element_type.cpp_type}>(data_->{field.name}, data_->{field.name} + data_->num_{field.name}, {field.name}_refs_);")
+                            f"return ArrayAccessor<{field.type.c_type}, {element_type.cpp_type}>(&data_->{field.name}, data_->num_{field.name}, {field.name}_refs_);")
             else:
                 cls.write(f"inline {field.type.cpp_type} {field.name}() const {{ return {field.type.cpp_type}(data_->{field.name}); }}")
 
-        cls.write(f"const struct {obj.__name__}* data() const {{ return data_; }}")
-        cls.write(f"TVM_DECLARE_FINAL_OBJECT_INFO({obj.__name__}, MetadataBaseNode);")
+        cls.write(f"const struct ::TVM{obj.__name__}* data() const {{ return data_; }}")
+        cls.write(f"TVM_DECLARE_FINAL_OBJECT_INFO({obj.__name__}Node, MetadataBaseNode);")
 
         cls.write(f"private:", adjust=-1)
-        cls.write(f"const struct {obj.__name__}* data_;")
+        cls.write(f"const struct ::TVM{obj.__name__}* data_;")
 
         for field in metadata_fields:
             if field.type.is_array and not field.type.element_type.is_primitive:
                 cls.write(f"::std::shared_ptr<::std::vector<{field.type.element_type.cpp_type}>> {field.name}_refs_;")
 
-    with header.scope(f"\nclass {obj.__name__} : public MetadataBaseRef {{", "};") as cls:
+    with header.scope(f"\nclass {obj.__name__} : public MetadataBase {{", "};") as cls:
         cls.write("public:", adjust=-1)
-        cls.write(f"{obj.__name__}(const struct {obj.__name__}* data);")
-        cls.write(f"TVM_DEFINE_OBJECT_REF_METHODS({obj.__name__}, MetadataBaseRef, {obj.__name__}Node);")
+        cls.write(f"{obj.__name__}(const struct ::TVM{obj.__name__}* data);")
+        cls.write(f"TVM_DEFINE_OBJECT_REF_METHODS({obj.__name__}, MetadataBase, {obj.__name__}Node);")
 
-    impl.write(f"{obj.__name__}::{obj.__name__}(const struct {obj.__name__}* data) :")
-    impl.write(f"MetadataBaseRef{{make_object<{obj.__name__}Node>(data)}} {{}}", adjust=4)
+    impl.write(f"{obj.__name__}::{obj.__name__}(const struct ::TVM{obj.__name__}* data) :")
+    impl.write(f"MetadataBase{{make_object<{obj.__name__}Node>(data)}} {{}}", adjust=4)
 
 
 def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer):
@@ -409,7 +411,7 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
                     raise TypeError(f"Don't know how to codegen field {field.name} with type {field.type.python_type}")
 
         cls.write("\nprivate:", adjust=-1)
-        cls.write(f"struct {obj.__name__} storage_;")
+        cls.write(f"struct ::TVM{obj.__name__} storage_;")
 
         # define non-primitive storage.
         for i, field in enumerate(metadata_fields):
@@ -430,7 +432,7 @@ def path_arg(s):
 def header_guard_scope(writer, file_path, generated_toplevel_dir):
     relpath = file_path.relative_to(generated_toplevel_dir)
     define = f"TVM_{str(relpath).replace(os.path.sep, '_').replace('.', '_').upper()}"
-    return writer.scope(f"#ifndef {define}\n#define {define}\n", "\n#endif  // {define}", scope_indent=0)
+    return writer.scope(f"#ifndef {define}\n#define {define}\n", f"\n#endif  // {define}", scope_indent=0)
 
 
 def namespace_scope(writer, namespaces, include_c_guard=False):
@@ -475,35 +477,37 @@ def main(argv):
         rt_header = rt_stack.enter_context(Writer(args.runtime_header))
         rt_impl = rt_stack.enter_context(Writer(args.runtime_impl))
         rt_header.write("// AUTOGENERATED DO NOT EDIT")
-
-        header_ns_scope = rt_stack.enter_context(
-            namespace_scope(
-                rt_stack.enter_context(
-                    header_guard_scope(rt_header, args.runtime_header, args.generated_toplevel_dir)),
-                ["tvm", "runtime", "metadata"]))
-
-        rt_impl.write(f'#include "{args.runtime_header.name}"')
-        impl_ns_scope = rt_stack.enter_context(
-            namespace_scope(rt_impl, ["tvm", "runtime", "metadata"]))
-
-        header_ns_scope.write(textwrap.dedent("""\
+        guard_scope = rt_stack.enter_context(
+            header_guard_scope(rt_header, args.runtime_header, args.generated_toplevel_dir))
+        guard_scope.write("#include <inttypes.h>")
+        guard_scope.write("#include <tvm/runtime/c_runtime_api.h>")
+        guard_scope.write("#include <tvm/support/span.h>")
+        guard_scope.write(textwrap.dedent("""\
             #ifdef __cplusplus
             extern "C" {
             #endif
             """))
         for obj in traversal_order:
-            generate_struct(obj, header_ns_scope)
+            generate_struct(obj, guard_scope)
 
-        header_ns_scope.write(textwrap.dedent("""\
+        guard_scope.write(textwrap.dedent("""\
             #ifdef __cplusplus
             }  // extern "C"
-            #else
             """))
 
-        for obj in traversal_order:
-            generate_class(obj, header_ns_scope, impl_ns_scope)
+        guard_scope.write("#include <tvm/runtime/object.h>")
+        with namespace_scope(guard_scope, ["tvm", "runtime", "metadata"]) as header_ns_scope:
+            rt_impl.write(f'#include <tvm/runtime/metadata.h>')
+            impl_ns_scope = rt_stack.enter_context(
+                namespace_scope(rt_impl, ["tvm", "runtime", "metadata"]))
 
-        header_ns_scope.write("#endif  // defined(__cplusplus)")
+            for obj in traversal_order:
+                header_ns_scope.write(f"class {obj.__name__};")
+
+            for obj in traversal_order:
+                generate_class(obj, header_ns_scope, impl_ns_scope)
+
+        rt_header.write("#endif  // defined(__cplusplus)")
 
     with contextlib.ExitStack() as cc_stack:
         cc_header = cc_stack.enter_context(Writer(args.compiler_header))
