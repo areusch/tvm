@@ -31,17 +31,17 @@
 namespace tvm {
 namespace support {
 
-template<class T, class W, std::enable_if<std::is_constructible<W, typeof(std::add_rvalue_reference<T>::value)>::value>>
+template<class T, class W> //, std::enable_if_t<std::is_constructible<W, std::add_rvalue_reference<T>::value>::value> = true>
 class Span {
-
+ public:
   class iterator : public std::iterator<std::input_iterator_tag, W> {
    public:
     inline iterator(T* ptr, T* end) : ptr_{ptr}, end_{end} {
       CHECK_GE(end, ptr);
     }
 
-    inline reference operator*() {
-      return ptr_;
+    inline W& operator*() {
+      return W(*ptr_);
     }
 
     inline iterator& operator++() {
