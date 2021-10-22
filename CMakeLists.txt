@@ -234,6 +234,26 @@ if(BUILD_FOR_ANDROID)
   list(APPEND TVM_RUNTIME_LINKER_LIBS "gcc")
 endif()
 
+# generate TVM sources
+set(GEN_SOURCES_DIR generated)
+set(GEN_RUNTIME_METADATA_INCLUDE "${GEN_SOURCES_DIR}/include/tvm/generated/runtime/metadata.h")
+set(GEN_RUNTIME_METADATA_SRC "${GEN_SOURCES_DIR}/src/generated/runtime/metadata.cc")
+set(GEN_TARGET_METADATA_INCLUDE "${GEN_SOURCES_DIR}/include/tvm/generated/target/metadata.h")
+set(GEN_TARGET_METADATA_SRC "${GEN_SOURCES_DIR}/src/generated/target/metadata.cc")
+add_custom_command(OUTPUT "${GEN_RUNTIME_METADATA_INCLUDE}" "${GEN_RUNTIME_METADATA_SRC}"
+                          "${GEN_TARGET_METADATA_INCLUDE}" "${GEN_TARGET_METADATA_SRC}"
+                   COMMAND python3
+                   ARGS "${CMAKE_SOURCE_DIR}/python/tvm/runtime/metadata.py"
+                        --runtime-header "${GEN_RUNTIME_METADATA_INCLUDE}"
+                        --runtime-impl "${GEN_RUNTIME_METADATA_SRC}"
+                        --compiler-header "${GEN_TARGET_METADATA_INCLUDE}"
+                        --compiler-impl "${GEN_TARGET_METADATA_SRC}"
+                        --generated-toplevel-dir "${GEN_SOURCES_DIR}/include/tvm"
+                   MAIN_DEPENDENCY "${CMAKE_SOURCE_DIR}/python/tvm/runtime/metadata.py"
+)
+
+# XXX DNS TODO: make all objs depend on above target
+
 # add source group
 FILE(GLOB_RECURSE GROUP_SOURCE "src/*.cc")
 FILE(GLOB_RECURSE GROUP_INCLUDE "src/*.h" "include/*.h")
@@ -296,6 +316,9 @@ file(GLOB RUNTIME_SRCS
   src/runtime/*.cc
   src/runtime/vm/*.cc
 )
+
+list(APPEND COMPILER_SRCS "${GEN_TARGET_METADATA_SRC}")
+list(APPEND RUNTIME_SRCS "${GEN_RUNTIME_METADATA_SRC}")
 
 if(BUILD_FOR_HEXAGON)
   # Add file implementing posix_memalign when building the runtime as
@@ -565,26 +588,21 @@ target_link_libraries(tvm_runtime PRIVATE ${TVM_RUNTIME_LINKER_LIBS})
 # Set flags for clang
 include(cmake/modules/ClangFlags.cmake)
 
+function(tvm_include_directories)
+target_include_directories(tvm ${ARGV})
+target_include_directories(tvm_objs ${ARGV})
+target_include_directories(tvm_libinfo_objs ${ARGV})
+endfunction()
+
 # Related headers
-target_include_directories(
-  tvm
-  PUBLIC "topi/include")
-target_include_directories(
-  tvm_objs
-  PUBLIC "topi/include")
-target_include_directories(
-  tvm_libinfo_objs
-  PUBLIC "topi/include")
-set(CRC16_INCLUDE_PATH "3rdparty/libcrc/include")
-target_include_directorieS(
-  tvm_objs
-  PRIVATE "${CRC16_INCLUDE_PATH}")
-target_include_directorieS(
-  tvm_libinfo_objs
-  PRIVATE "${CRC16_INCLUDE_PATH}")
-target_include_directorieS(
-  tvm_runtime_objs
-  PRIVATE "${CRC16_INCLUDE_PATH}")
+tvm_include_directories(PUBLIC topi/include)
+tvm_include_directories(PUBLIC 3rdparty/libcrc/include)
+
+# Generated headers
+tvm_include_directories(SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/${GEN_SOURCES_DIR}/include")
+target_include_directories(tvm_runtime_objs SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/${GEN_SOURCES_DIR}/include")
+set_property(SOURCE $<TARGET_OBJECTS:tvm_objs> APPEND PROPERTY OBJECT_DEPENDS "${GEN_RUNTIME_METADATA_INCLUDE}" "${GEN_TARGET_METADATA_INCLUDE}")
+set_property(SOURCE $<TARGET_OBJECTS:tvm_runtime_objs> APPEND PROPERTY OBJECT_DEPENDS "${GEN_RUNTIME_METADATA_INCLUDE}" "${GEN_TARGET_METADATA_INCLUDE}")
 
 set(TVM_TEST_LIBRARY_NAME tvm)
 if (HIDE_PRIVATE_SYMBOLS AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

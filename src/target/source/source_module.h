@@ -26,10 +26,10 @@
 #define TVM_TARGET_SOURCE_SOURCE_MODULE_H_
 
 #include <tvm/relay/runtime.h>
+#include <tvm/runtime/metadata.h>
 #include <tvm/runtime/module.h>
 #include <tvm/target/target.h>
 
-#include "../../runtime/meta_data.h"
 
 namespace tvm {
 namespace codegen {
@@ -43,7 +43,7 @@ namespace codegen {
  * \return The wrapped module.
  */
 runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& modules, Target target,
-                                               relay::Runtime runtime, runtime::Metadata metadata);
+                                               relay::Runtime runtime, runtime::metadata::Metadata metadata);
 
 }  // namespace codegen
 }  // namespace tvm

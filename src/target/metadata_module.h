@@ -29,6 +29,7 @@
 #include <tvm/runtime/module.h>
 #include <tvm/runtime/ndarray.h>
 #include <tvm/target/target.h>
+#include <tvm/generated/target/metadata.h>
 
 #include <string>
 #include <unordered_map>
