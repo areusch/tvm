@@ -73,7 +73,7 @@ class Span {
     return iterator(end_, end_);
   }
 
-  inline W& operator[](int i) {
+  inline W operator[](int i) {
     T* to_return = begin_ + i;
     ICHECK_LT(to_return, end_) << "Span access out of bounds: " << i;
     return W(*to_return);

@@ -28,6 +28,7 @@
 #include <tvm/runtime/module.h>
 #include <tvm/runtime/ndarray.h>
 #include <tvm/target/target.h>
+#include <tvm/generated/target/metadata.h>
 
 #include <string>
 #include <unordered_map>
@@ -40,7 +41,7 @@ namespace codegen {
 runtime::Module CreateMetadataModule(
     const std::unordered_map<std::string, runtime::NDArray>& params,
     tvm::runtime::Module target_module, const Array<runtime::Module>& ext_modules, Target target,
-    runtime::Metadata metadata);
+    runtime::metadata::Metadata metadata);
 
 }  // namespace codegen
 }  // namespace tvm

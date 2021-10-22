@@ -25,6 +25,7 @@
 #ifndef TVM_TARGET_SOURCE_CODEGEN_SOURCE_BASE_H_
 #define TVM_TARGET_SOURCE_CODEGEN_SOURCE_BASE_H_
 
+#include <tvm/generated/target/metadata.h>
 #include <tvm/target/codegen.h>
 #include <tvm/tir/expr.h>
 #include <tvm/tir/op.h>
@@ -156,7 +157,7 @@ runtime::Module CSourceModuleCreate(const String& code, const String& fmt,
  */
 runtime::Module CreateMetadataModule(
     const std::unordered_map<std::string, runtime::NDArray>& params, runtime::Module target_module,
-    const Array<runtime::Module>& ext_modules, Target target, runtime::Metadata metadata);
+    const Array<runtime::Module>& ext_modules, Target target, runtime::metadata::Metadata metadata);
 
 /*!
  * \brief Create a source module for viewing and limited saving for device.
@@ -178,7 +179,7 @@ runtime::Module DeviceSourceModuleCreate(
  * \return The wrapped module.
  */
 runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& modules, Target target,
-                                               runtime::Metadata metadata);
+                                               runtime::metadata::Metadata metadata);
 
 }  // namespace codegen
 }  // namespace tvm

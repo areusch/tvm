@@ -25,12 +25,76 @@
 
 #include <vector>
 
+#include "../runtime/const_loader_module.h"
 #include "../runtime/meta_data.h"
 #include "llvm/llvm_module.h"
 #include "source/source_module.h"
 
 namespace tvm {
 namespace codegen {
+
+static runtime::Module CreateCrtMetadataModule(runtime::Module target_module, Target target,
+                                               runtime::metadata::Metadata metadata,
+                                               Array<runtime::Module> non_crt_exportable_modules,
+                                               Array<runtime::Module> crt_exportable_modules,
+                                               const std::unordered_map<std::string, runtime::NDArray>& params) {
+
+  if (!non_crt_exportable_modules.empty()) {
+    std::string non_exportable_modules;
+    for (unsigned int i = 0; i < non_crt_exportable_modules.size(); i++) {
+      if (i > 0) {
+        non_exportable_modules += ", ";
+      }
+      auto mod = non_crt_exportable_modules[i];
+      auto pf_sym = mod.GetFunction("get_symbol");
+      if (pf_sym != nullptr) {
+        non_exportable_modules += pf_sym().operator std::string();
+      } else {
+        non_exportable_modules +=
+          std::string{"(module type_key="} + mod->type_key() + std::string{")"};
+      }
+    }
+    CHECK(false) << "These " << non_crt_exportable_modules.size()
+                 << " modules are not exportable to C-runtime: " << non_exportable_modules;
+  }
+
+  if (target->kind->name == "c") {
+    crt_exportable_modules.push_back(target_module);
+    target_module = CreateCSourceCrtMetadataModule(crt_exportable_modules, target, metadata);
+  } else if (target->kind->name == "llvm") {
+#ifdef TVM_LLVM_VERSION
+    crt_exportable_modules.push_back(target_module);
+    target_module = CreateLLVMCrtMetadataModule(crt_exportable_modules, target);
+#else   // TVM_LLVM_VERSION
+    LOG(FATAL) << "TVM was not built with LLVM enabled.";
+#endif  // TVM_LLVM_VERSION
+  }
+
+  return target_module;
+}
+
+static runtime::Module CreateCppMetadataModule(runtime::Module target_module, Target target,
+                                               runtime::metadata::Metadata metadata,
+                                               const std::unordered_map<std::string, std::vector<std::string>>& sym_metadata,
+                                               Array<runtime::Module> non_crt_exportable_modules,
+                                               Array<runtime::Module> crt_exportable_modules,
+                                               const std::unordered_map<std::string, runtime::NDArray>& params) {
+  if (!non_crt_exportable_modules.empty()) {
+    runtime::Module const_loader_mod = runtime::ConstLoaderModuleCreate(params, sym_metadata);
+    const_loader_mod.Import(target_module);
+    for (const auto& it : non_crt_exportable_modules) {
+      const_loader_mod.Import(it);
+    }
+    target_module = const_loader_mod;
+  }
+
+  if (target->GetAttr<String>("executor").value_or("") == "aot" &&
+      target->GetAttr<String>("runtime").value_or(kTvmRuntimeCpp) == kTvmRuntimeCpp) {
+//    runtime::Module metadata_module =
+  }
+
+  return target_module;
+}
 
 /*!
  * \brief Create a metadata module wrapper. The helper is used by different
@@ -46,7 +110,7 @@ namespace codegen {
 runtime::Module CreateMetadataModule(
     const std::unordered_map<std::string, runtime::NDArray>& params,
     tvm::runtime::Module target_module, const Array<runtime::Module>& ext_modules, Target target,
-    runtime::Metadata metadata) {
+    runtime::metadata::Metadata metadata) {
   // Here we split modules into two groups:
   //  1. Those modules which can be exported to C-runtime. These are DSO-exportable
   //     (i.e. llvm or c) modules which return nothing from get_const_vars().
@@ -93,66 +157,10 @@ runtime::Module CreateMetadataModule(
   }
 
   if (is_targeting_crt) {
-    return CreateCrtMetadataModule();
+    return CreateCrtMetadataModule(target_module, target, metadata, non_crt_exportable_modules, crt_exportable_modules, params);
   } else {
-    return CreateCppMetadataModule();
+    return CreateCppMetadataModule(target_module, target, metadata, sym_metadata, non_crt_exportable_modules, crt_exportable_modules, params);
   }
-}
-
-runtime::Module CreateCrtMetadataModule(runtime::Module target_module, Target target,
-                                        const std::vector<runtime::Module>& non_crt_exportable_modules,
-                                        const std::vector<runtime::Module>& crt_exportable_modules,
-                                        const std::unordered_map<std::string, runtime::NDArray>& params) {
-
-  if (!non_crt_exportable_modules.empty()) {
-    std::string non_exportable_modules;
-    for (unsigned int i = 0; i < non_crt_exportable_modules.size(); i++) {
-      if (i > 0) {
-        non_exportable_modules += ", ";
-      }
-      auto mod = non_crt_exportable_modules[i];
-      auto pf_sym = mod.GetFunction("get_symbol");
-      if (pf_sym != nullptr) {
-        non_exportable_modules += pf_sym().operator std::string();
-      } else {
-        non_exportable_modules +=
-          std::string{"(module type_key="} + mod->type_key() + std::string{")"};
-      }
-    }
-    CHECK(false) << "These " << non_crt_exportable_modules.size()
-                 << " modules are not exportable to C-runtime: " << non_exportable_modules;
-  }
-
-  if (target->kind->name == "c") {
-    crt_exportable_modules.push_back(target_module);
-    target_module = CreateCSourceCrtMetadataModule(crt_exportable_modules, target, metadata);
-  } else if (target->kind->name == "llvm") {
-#ifdef TVM_LLVM_VERSION
-    crt_exportable_modules.push_back(target_module);
-    target_module = CreateLLVMCrtMetadataModule(crt_exportable_modules, target);
-#else   // TVM_LLVM_VERSION
-    LOG(FATAL) << "TVM was not built with LLVM enabled.";
-#endif  // TVM_LLVM_VERSION
-  }
-}
-
-runtime::Module CreateCppMetadataModule(runtime::Module target_module, Target target, runtime::Metadata metadata,
-                                        const std::vector<runtime::Module>& non_crt_exportable_modules,
-                                        const std::vector<runtime::Module>& crt_exportable_modules,
-                                        const std::unordered_map<std::string, runtime::NDArray>& params) {
-  if (!non_crt_exportable_modules.empty()) {
-    runtime::Module const_loader_mod = runtime::ConstLoaderModuleCreate(params, sym_metadata);
-    const_loader_mod.Import(target_module);
-    for (const auto& it : non_crt_exportable_modules) {
-      const_loader_mod.Import(it);
-    }
-    target_module = const_loader_mod;
-  }
-
-  if (target.GetAttr<String>("executor").value_or("") == "aot") {
-    runtime::Module metadata_module =
-
-  return target_module;
 }
 
 }  // namespace codegen

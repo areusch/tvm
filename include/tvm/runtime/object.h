@@ -699,9 +699,9 @@ struct ObjectPtrEqual {
 
 /*
  * \brief Define object reference methods.
- * \param TypeName The object type name
- * \param ParentType The parent type of the objectref
- * \param ObjectName The type name of the object.
+ * \param TypeName The type name of this objectref subclass.
+ * \param ParentType The parent type of this objectref subclss.
+ * \param ObjectName The type name of the object referenced by this class.
  */
 #define TVM_DEFINE_OBJECT_REF_METHODS(TypeName, ParentType, ObjectName)                        \
   TypeName() = default;                                                                        \
@@ -714,9 +714,9 @@ struct ObjectPtrEqual {
 /*
  * \brief Define object reference methods that is not nullable.
  *
- * \param TypeName The object type name
- * \param ParentType The parent type of the objectref
- * \param ObjectName The type name of the object.
+ * \param TypeName The type name of this objectref subclass.
+ * \param ParentType The parent type of this objectref subclss.
+ * \param ObjectName The type name of the object referenced by this class.
  */
 #define TVM_DEFINE_NOTNULLABLE_OBJECT_REF_METHODS(TypeName, ParentType, ObjectName)            \
   explicit TypeName(::tvm::runtime::ObjectPtr<::tvm::runtime::Object> n) : ParentType(n) {}    \
@@ -728,9 +728,9 @@ struct ObjectPtrEqual {
 
 /*
  * \brief Define object reference methods of whose content is mutable.
- * \param TypeName The object type name
- * \param ParentType The parent type of the objectref
- * \param ObjectName The type name of the object.
+ * \param TypeName The type name of this objectref subclass.
+ * \param ParentType The parent type of this objectref subclss.
+ * \param ObjectName The type name of the object referenced by this class.
  * \note We recommend making objects immutable when possible.
  *       This macro is only reserved for objects that stores runtime states.
  */
@@ -744,9 +744,9 @@ struct ObjectPtrEqual {
 /*
  * \brief Define object reference methods that is both not nullable and mutable.
  *
- * \param TypeName The object type name
- * \param ParentType The parent type of the objectref
- * \param ObjectName The type name of the object.
+ * \param TypeName The type name of this objectref subclass.
+ * \param ParentType The parent type of this objectref subclss.
+ * \param ObjectName The type name of the object referenced by this class.
  */
 #define TVM_DEFINE_MUTABLE_NOTNULLABLE_OBJECT_REF_METHODS(TypeName, ParentType, ObjectName) \
   explicit TypeName(::tvm::runtime::ObjectPtr<::tvm::runtime::Object> n) : ParentType(n) {} \

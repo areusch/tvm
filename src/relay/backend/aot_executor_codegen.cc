@@ -704,6 +704,26 @@ class AOTExecutorCodegen : public MixedModeVisitor {
       ret.lowered_funcs.Set(target_host_, mod_run);
     }
 
+    Array<runtime::metadata::FunctionInfo> function_info;
+    for (auto it : lowered_module.functions) {
+      auto lowered_func = (*it).second;
+      auto runtime_param_map = lowered_func->GetAttr<Array<ArgumentMapping>>(tir::attr::kRuntimeParamMap);
+
+      std::vector<runtime::metadata::ParameterInfo> param_info;
+      for (auto arg_mapping : runtime_param_map) {
+        auto n = make_object<runtime::metadata::InMemoryParameterInfo>(::std::string{arg_mapping.relay_name_hint},
+                                                                       ::std::string{arg_mapping.tir_name_hint},
+                                                                       ShapeToJSON(arg_mapping.shape),
+                                                                       arg_mapping.dtype);
+        param_info.emplace_back(runtime::metadata::ParameterInfo(std::move(n)));
+      }
+
+      function_info.emplace_back(std::move(make_object<runtime::metadata::InMemoryFunctionInfo(
+                                             (*it).first->name_hint,
+                                             param_info,
+
+    }
+
     Array<String> input_var_names;
     Array<ShapeTuple> input_var_shapes;
     std::vector<DLDataType> input_var_dtypes(input_vars_.size());

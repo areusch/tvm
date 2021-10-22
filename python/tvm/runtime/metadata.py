@@ -159,9 +159,9 @@ class MetadataType:
             return f"{self.element_type.c_type}*"
         elif self.is_object:
             if self.is_element_type:
-                return f"const struct TVM{self.python_type.__name__}"
+                return f"struct TVM{self.python_type.__name__}"
             else:
-                return f"const struct TVM{self.python_type.__name__}*"
+                return f"struct TVM{self.python_type.__name__}*"
         else:
             raise TypeError(f"unknown type {self.python_type}")
 
@@ -207,9 +207,26 @@ class MetadataType:
         elif self.python_type is str:
             return "::std::string"
         elif self.is_array:
-            return f"::std::unique_ptr<{self.c_type}>"
+            return f"::std::unique_ptr<{self.element_type.c_type}>"
         elif self.is_object:
             return "{self.python_type.__name__}"  # Ref class
+        else:
+            raise TypeError(f"field {field.name}: unknown type {self.python_type}")
+
+    PRIM_EXPR_TYPE_BY_PYTHON_TYPE = {
+        int: "::tvm::Integer",
+        bool: "::tvm::Bool",
+        DataType: "::tvm::PrimType",
+    }
+
+    @property
+    def prim_expr_ref_type(self) -> str:
+        if self.python_type in self.PRIM_EXPR_TYPE_BY_PYTHON_TYPE:
+            return self.PRIM_EXPR_TYPE_BY_PYTHON_TYPE[self.python_type]
+        elif self.is_array:
+            return "Array"
+        elif self.is_object:
+            return self.python_type.__name__
         else:
             raise TypeError(f"field {field.name}: unknown type {self.python_type}")
 
@@ -301,6 +318,7 @@ def generate_class(obj, header, impl):
         for field in metadata_fields:
             if field.type.is_array:
                 element_type = field.type.element_type
+                cls.write(f"inline int64_t num_{field.name}() const {{ return data_->num_{field.name}; }}")
                 if element_type.is_primitive:
                     with cls.scope(f"inline {field.type.cpp_type} {field.name}() const {{", "}") as func:
                       func.write(f"return {field.type.cpp_type}(data_->{field.name}, data_->{field.name} + data_->num_{field.name});")
@@ -350,16 +368,17 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
                 continue
 
             if field.type.is_array:
-                cls.write(f"{field.name}_{{new {field.type.element_type.c_type}[{field.name}.size()]()}}{', ' if i < len(metadata_fields) - 1 else ''}", adjust=4)
+                cls.write(f"{field.name}_{{new {field.type.element_type.c_type}[{field.name}.size()]()}},", adjust=4)
             else:
-                cls.write(f"{field.name}_{{{field.name}}}{', ' if i < len(metadata_fields) - 1 else ''}", adjust=4)
+                cls.write(f"{field.name}_{{{field.name}}},", adjust=4)
 
         with cls.scope("    storage_{", "    },", scope_indent=8) as storage_init:
             for i, field in enumerate(metadata_fields):
                 if field.type.is_primitive:
-                    storage_init.write(f"{field.name}_{', ' if i < len(metadata_fields) - 1 else ''}")
+                    storage_init.write(f"{field.name}{', ' if i < len(metadata_fields) - 1 else ''}")
                 elif field.type.is_array or field.type.is_object:  # same accesor method
                     storage_init.write(f"{field.name}_.get(){', ' if i < len(metadata_fields) - 1 else ''}")
+                    storage_init.write(f"{field.name}.size(){', ' if i < len(metadata_fields) - 1 else ''}")
                 elif field.type.python_type is str:
                     storage_init.write(f"{field.name}_.c_str(){', ' if i < len(metadata_fields) - 1 else ''}")
                 else:
@@ -369,11 +388,11 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
                 if field.type.is_array:
                     with init_scope.scope(f"for (int i = 0; i < {field.name}.size(); ++i) {{", "}") as for_scope:
                         if field.type.element_type.is_primitive:
-                            for_scope.write(f"{field.name}_[i] = {field.name}_[i];")
+                            for_scope.write(f"{field.name}_.get()[i] = {field.name}[i];")
                         elif field.type.element_type.python_type is str:
-                            for_scope.write(f"{field.name}_[i] = {field.name}_[i].c_str();")
+                            for_scope.write(f"{field.name}_.get()[i] = {field.name}[i].c_str();")
                         elif field.type.element_type.is_object:
-                            for_scope.write(f"{field.name}_[i] = {field.name}_[i]->data();")
+                            for_scope.write(f"{field.name}_.get()[i] = *{field.name}[i]->data();")
                         elif field_type.element_type.is_array:
                             raise TypeError(f"field {field.name}: array of array not supported")
                         else:
@@ -382,26 +401,26 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
         with cls.scope("\nvoid VisitAttrs(AttrVisitor* v) {", "}") as visit:
             for i, field in enumerate(metadata_fields):
                 if field.type.python_type in (int, float):
-                    visit.write(f'v->Visit("{field.name}", &storage_->{field.name});')
+                    visit.write(f'v->Visit("{field.name}", &storage_.{field.name});')
                 elif field.type.python_type is DataType:
-                    visit.write(f"::tvm::runtime::DataType {field.name}_dtype{{{field.name}}};")
-                    visit.write(f'v->Visit("{field.name}", {field.name}_dtype);')
-                    visit.write(f"storage_->{field.name} = {field.name}_dtype;")
+                    visit.write(f"::tvm::runtime::DataType {field.name}_dtype{{storage_.{field.name}}};")
+                    visit.write(f'v->Visit("{field.name}", &{field.name}_dtype);')
+                    visit.write(f"storage_.{field.name} = {field.name}_dtype;")
                 elif field.type.is_array:
-                    # visit.write(f"::std::vector<{field.prim_expr_ref_type}> {field.name}_vector;")
-                    # visit.write(f"{field.name}_vector.reserve(storage_.num_{field.name});")
-                    # with visit.scope(f"for (int64_t i = 0; i < storage_.num_{field.name}; ++i) {{", "}") as list_for:
-                    #     element_type = field.type.element_type
-                    #     if element_type.is_primitive:
-                    #         visit.write(f"      {field.name}_vector[i].emplace_back({field.prim_expr_ref_type}{{storage_.{field.name}}});")
-                    #     elif element_type.is_array:
-                    #         raise TypeError("list of list not supported")
-                    #     elif element_type.is_object:
-                    #         visit.write(f"      {field.name}_vector[i].emplace_back({field.prim_expr_ref_type}{{storage_.{field.name}}});")
-                    #     else:
-                    #         raise TypeError(f"no such type: {element_type}")
-#                    visit.write(f"auto {field.name}_accessor = {field.name}();");
-#                    visit.write(f"Array<{field.prim_expr_ref_type}> {field.name}_array{{{field.name}_accessor.begin(), {field.name}_accessor.end()}};");
+                    visit.write(textwrap.dedent(f"""\
+                        ::tvm::runtime::Array<{field.type.element_type.prim_expr_ref_type}> {field.name}_array;
+                        auto {field.name}_accessor = {field.name}();
+                        {field.name}_array.reserve(num_{field.name}());"""))
+                    with visit.scope(f"for (int64_t i = 0; i < num_{field.name}(); ++i) {{", "}") as for_scope:
+                        element_type = field.type.element_type
+                        if element_type.is_primitive:
+                            visit.write(f"{field.name}_array.push_back({field.type.element_type.prim_expr_ref_type}{{{field.name}_accessor[i]}});")
+                        elif element_type.is_array:
+                            raise TypeError("list of list not supported")
+                        elif element_type.is_object:
+                            visit.write(f"{field.name}_array.push_back({field.type.element_type.prim_expr_ref_type}{{{field.name}_accessor[i]}});")
+                        else:
+                            raise TypeError(f"no such type: {element_type}")
                     visit.write(f'v->Visit("{field.name}", &{field.name}_array);')
                 elif field.type.is_object:
                     visit.write(f'v->Visit("{field.name}", &{field.name}_);')
@@ -514,11 +533,11 @@ def main(argv):
         cc_impl = cc_stack.enter_context(Writer(args.compiler_impl))
         cc_header.write("// AUTOGENERATED DO NOT EDIT")
 
+        guard_scope = cc_stack.enter_context(
+            header_guard_scope(cc_header, args.compiler_header, args.generated_toplevel_dir))
+        guard_scope.write(f'#include <memory>\n#include <string>\n#include <vector>\n#include <tvm/runtime/metadata.h>')
         header_ns_scope = cc_stack.enter_context(
-            namespace_scope(
-                cc_stack.enter_context(
-                    header_guard_scope(cc_header, args.compiler_header, args.generated_toplevel_dir)),
-                ["tvm", "runtime", "metadata"]))
+            namespace_scope(guard_scope, ["tvm", "runtime", "metadata"]))
 
         cc_impl.write(f'#include "{args.compiler_header.name}"')
         impl_ns_scope = cc_stack.enter_context(

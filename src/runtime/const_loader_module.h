@@ -28,7 +28,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <tvm/runtime/ndarray.H>
+#include <tvm/runtime/ndarray.h>
 
 namespace tvm {
 namespace runtime {

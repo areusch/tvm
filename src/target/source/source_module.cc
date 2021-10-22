@@ -26,6 +26,7 @@
 #include <tvm/runtime/ndarray.h>
 #include <tvm/runtime/packed_func.h>
 #include <tvm/runtime/registry.h>
+#include <tvm/generated/target/metadata.h>
 
 #include <string>
 #include <unordered_map>
@@ -129,7 +130,7 @@ runtime::Module CSourceModuleCreate(const String& code, const String& fmt,
 
 class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
  public:
-  CSourceCrtMetadataModuleNode(const Array<String>& func_names, Target target, runtime::Metadata metadata)
+  CSourceCrtMetadataModuleNode(const Array<String>& func_names, Target target, runtime::metadata::Metadata metadata)
       : func_names_(func_names), target_(target), metadata_(metadata) {
     CreateSource();
   }
@@ -156,7 +157,7 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
   std::stringstream code_;
   Array<String> func_names_;
   Target target_;
-  runtime::Metadata metadata_;
+  runtime::metadata::Metadata metadata_;
 
   void CreateFuncRegistry() {
     code_ << "#include <tvm/runtime/crt/module.h>\n";
@@ -542,7 +543,7 @@ private:
 
 class MetadataModuleNode : public runtime::ModuleNode {
  public:
-  CSourceCppMetadataModuleNode(runtime::c_metadata::Metadata metadata) {
+  CSourceCppMetadataModuleNode(runtime::metadata::Metadata metadata) {
     metadata_ = metadata;
   }
   const char* type_key() const { return "metadata"; }
@@ -568,8 +569,9 @@ class MetadataModuleNode : public runtime::ModuleNode {
   std::stringstream decl_;
   std::stringstream code_;
 
+  runtime::metadata::Metadata metadata_;
 
-  void CreateSource(Metadata metadata) {
+  void CreateSource(runtime::metadata::Metadata metadata) {
 //    decl_ << "#include <tvm/runtime/object.h>" << std::endl;
 
 
@@ -597,6 +599,10 @@ runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& mod
     csrc_metadata_module.Import(mod);
   }
   return std::move(csrc_metadata_module);
+}
+
+runtime::Module CreateCSourceCppMetadataModule(Metadata metadata) {
+  return make_object<CSourceCppMetadataModule>(metadata);
 }
 
 // supports limited save without cross compile
