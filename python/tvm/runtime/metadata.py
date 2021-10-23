@@ -25,6 +25,7 @@ This module is intended to be used two ways:
 
 import argparse
 import contextlib
+import inspect
 import os
 import pathlib
 import sys
@@ -135,12 +136,12 @@ class MetadataType:
 
     @property
     def is_object(self) -> bool:
-        return issubclass(self.python_type, MetadataBase)
+        return inspect.isclass(self.python_type) and issubclass(self.python_type, MetadataBase)
 
     @property
     def is_array(self) -> bool:
-#        print("TYPE", dir(self.python_type), getattr(self.python_type, '__origin__', None))
-        return getattr(self.python_type, '__origin__', None) is typing.List
+#        print("TYPE", self.python_type, getattr(self.python_type, '__origin__', None))
+        return getattr(self.python_type, '__origin__', None) in (typing.List, list)
 
     @property
     def element_type(self) -> "MetadataType":
