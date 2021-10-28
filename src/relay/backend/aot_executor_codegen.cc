@@ -22,6 +22,7 @@
  * \brief AOT executor codegen
  */
 
+#include <tvm/generated/target/metadata.h>
 #include <tvm/ir/module.h>
 #include <tvm/relay/attrs/annotation.h>
 #include <tvm/relay/attrs/call.h>
@@ -68,6 +69,7 @@ class AOTOnDemandAllocator : public transform::DeviceAwareExprVisitor {
   void Run(const Function& func) { VisitExpr(func); }
 
   std::vector<int> GetReturnIds() const { return return_ids_; }
+  std::vector<TensorType> GetReturnTtypes() const { return return_ttypes_; }
 
   StorageMap GetStorageMap() const { return storage_device_map_; }
 
@@ -172,6 +174,9 @@ class AOTOnDemandAllocator : public transform::DeviceAwareExprVisitor {
       for (auto sid : sinfo->storage_ids) {
         return_ids_.push_back(sid);
       }
+      return_ttypes_.clear();
+      auto ttypes = FlattenTupleType(e->checked_type());
+      std::copy(ttypes.begin(), ttypes.end(), return_ttypes_.begin());
     }
   }
   /*!
@@ -246,6 +251,8 @@ class AOTOnDemandAllocator : public transform::DeviceAwareExprVisitor {
   int next_available_sid_{0};
   /*! \brief the set of intermediate tensors that are return variables */
   std::vector<int> return_ids_;
+  /*! \brief the data types of the return values */
+  std::vector<TensorType> return_ttypes_;
 };
 
 /*! \brief Code generator for AOT executor */
@@ -864,38 +871,29 @@ class AOTExecutorCodegen : public MixedModeVisitor {
       ret.lowered_funcs.Set(target_host_, mod_run);
     }
 
-    Array<runtime::metadata::FunctionInfo> function_info;
-    for (auto it : lowered_module.functions) {
-      auto lowered_func = (*it).second;
-      auto runtime_param_map = lowered_func->GetAttr<Array<ArgumentMapping>>(tir::attr::kRuntimeParamMap);
-
-      std::vector<runtime::metadata::ParameterInfo> param_info;
-      for (auto arg_mapping : runtime_param_map) {
-        auto n = make_object<runtime::metadata::InMemoryParameterInfo>(::std::string{arg_mapping.relay_name_hint},
-                                                                       ::std::string{arg_mapping.tir_name_hint},
-                                                                       ShapeToJSON(arg_mapping.shape),
-                                                                       arg_mapping.dtype);
-        param_info.emplace_back(runtime::metadata::ParameterInfo(std::move(n)));
-      }
-
-      function_info.emplace_back(std::move(make_object<runtime::metadata::InMemoryFunctionInfo(
-                                             (*it).first->name_hint,
-                                             param_info,
-
+    std::vector<runtime::metadata::TensorInfo> inputs;
+    for (auto v : input_vars_) {
+      auto ttype = Downcast<TensorType>(v->type_annotation);
+      inputs.push_back(
+        runtime::metadata::TensorInfo(
+          make_object<runtime::metadata::InMemoryTensorInfoNode>(
+            v->name_hint(), ShapeToJSON(ttype->shape), ttype->dtype)));
     }
 
-    Array<String> input_var_names;
-    Array<ShapeTuple> input_var_shapes;
-    std::vector<DLDataType> input_var_dtypes(input_vars_.size());
-    for (unsigned int i = 0; i < input_vars_.size(); ++i) {
-      input_var_names.push_back(input_vars_[i]->name_hint());
-      auto ttype = Downcast<TensorType>(input_vars_[i]->type_annotation);
-      input_var_shapes.push_back(ShapeTuple(ShapeToJSON(ttype->shape)));
-      input_var_dtypes[i] = ttype->dtype.operator DLDataType();
+    std::vector<runtime::metadata::TensorInfo> outputs;
+    auto output_ttypes = final_aot_allocator.GetReturnTtypes();
+    for (int i = 0; i < output_ttypes.size(); i++) {
+      auto ttype = Downcast<TensorType>(output_ttypes[i]);
+      std::stringstream name;
+      name << "output" << i;
+      outputs.push_back(
+        runtime::metadata::TensorInfo(
+          make_object<runtime::metadata::InMemoryTensorInfoNode>(
+            name.str(), ShapeToJSON(ttype->shape), ttype->dtype)));
     }
-    ret.metadata =
-        runtime::Metadata(input_var_names, input_var_shapes, input_var_dtypes, ListDevices(), return_sid_.size(),
-                          runtime::kTvmExecutorAot, mod_name, interface_api, use_unpacked_api_);
+    ret.metadata = runtime::metadata::Metadata(
+      make_object<runtime::metadata::InMemoryMetadataNode>(
+        kMetadataVersion, inputs, outputs, ListDevices(), runtime::kTvmExecutorAot, mod_name, interface_api, use_unpacked_api_));
     return ret;
   }
 

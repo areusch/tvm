@@ -32,6 +32,7 @@
 #include <tvm/relay/type.h>
 #include <tvm/target/codegen.h>
 #include <tvm/target/se_scope.h>
+#include <tvm/generated/target/metadata.h>
 #include <tvm/te/operation.h>
 
 #include <string>
@@ -151,7 +152,7 @@ struct LoweredOutput {
   Array<tvm::runtime::Module> external_mods;
   Map<String, FunctionInfo> function_metadata;
   std::unordered_map<std::string, std::pair<int, const tvm::runtime::NDArray>> params;
-  runtime::Metadata metadata;
+  runtime::metadata::Metadata metadata;  // points to InMemoryMetadataNode
 };
 
 /*!
