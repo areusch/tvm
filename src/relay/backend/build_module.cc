@@ -95,7 +95,7 @@ struct ExecutorCodegen {
     return CallFunc<Map<Target, IRModule>>("get_irmodule", nullptr);
   }
 
-  runtime::Metadata GetMetadata() { return CallFunc<runtime::Metadata>("get_metadata"); }
+  runtime::metadata::Metadata GetMetadata() { return CallFunc<runtime::metadata::Metadata>("get_metadata"); }
   virtual ~ExecutorCodegen() {}
 
  protected:

@@ -53,33 +53,23 @@ else:
             pass
 
 # Start of Metadata -->
+VERSION = 1  # Increment when modifying.
 
-class ParameterInfo(MetadataBase):
-
+class TensorInfo(MetadataBase):
     _FIELDS = [
-        ("relay_name_hint", str),
-        ("tir_name_hint", str),
+        ("name", str),
         ("shape", List[int]),
         ("dtype", DataType),
     ]
-
-
-class FunctionInfo(MetadataBase):
-
-    _FIELDS = [
-        ("function_name", str),
-        ("params", List[ParameterInfo]),
-        ("num_inputs", int),
-    ]
-
 
 class Metadata(MetadataBase):
 
     _FIELDS = [
         ("version", int),
-        ("functions", List[FunctionInfo]),
-        ("module_name", str),
-        ("target", str),
+        ("inputs", List[TensorInfo]),
+        ("outputs", List[TensorInfo]),
+        ("executor", str),
+        ("mod_name", str),
     ]
 
 
@@ -171,7 +161,7 @@ class MetadataType:
         if self.python_type in (int, float):
             return self.C_TYPE_BY_PYTHON_TYPE[self.python_type]
         elif self.python_type is str:
-            return "::std::string"
+            return "::tvm::runtime::String"
         elif self.python_type is DataType:
             return "::tvm::runtime::DataType"
         elif self.is_array:
@@ -191,7 +181,7 @@ class MetadataType:
         elif self.python_type in (str, DataType):
             return f"const {self.cpp_type}&"
         elif self.is_array:
-            return f"const ::std::vector<{self.element_type.cpp_builder_type}>&"
+            return f"const ::std::vector<{self.element_type.in_memory_storage_type}>&"
         elif self.is_object:
             return self.python_type.__name__
         else:
@@ -204,19 +194,20 @@ class MetadataType:
     @property
     def in_memory_storage_type(self) -> str:
         if self.is_primitive:
-            return self.C_TYPE_BY_PYTHON_TYPE[python_type]
+            return self.C_TYPE_BY_PYTHON_TYPE[self.python_type]
         elif self.python_type is str:
             return "::std::string"
         elif self.is_array:
             return f"::std::unique_ptr<{self.element_type.c_type}>"
         elif self.is_object:
-            return "{self.python_type.__name__}"  # Ref class
+            return f"{self.python_type.__name__}"  # Ref class
         else:
             raise TypeError(f"field {field.name}: unknown type {self.python_type}")
 
     PRIM_EXPR_TYPE_BY_PYTHON_TYPE = {
         int: "::tvm::Integer",
         bool: "::tvm::Bool",
+        str: "::tvm::runtime::String",
         DataType: "::tvm::PrimType",
     }
 
@@ -229,7 +220,25 @@ class MetadataType:
         elif self.is_object:
             return self.python_type.__name__
         else:
-            raise TypeError(f"field {field.name}: unknown type {self.python_type}")
+            raise TypeError(f"unknown type {self.python_type}")
+
+    ZERO_VALUE_BY_PYTHON_TYPE = {
+        int: "0",
+        str: '""',
+        bool: "false",
+        DataType: "::tvm::runtime::DataType(0, 0, 0)",
+    }
+
+    @property
+    def zero_value(self):
+        if self.python_type in self.ZERO_VALUE_BY_PYTHON_TYPE:
+            return self.ZERO_VALUE_BY_PYTHON_TYPE[self.python_type]
+        elif self.is_array:
+            return "{}"
+        elif self.is_object:
+            return f"{self.cpp_type}({', '.join(MetadataType(t) for _, t in self.python_type._FIELDS)})"
+        else:
+            raise TypeError(f"unknown type {self.python_type}")
 
 
 class MetadataField:
@@ -324,12 +333,15 @@ def generate_class(obj, header, impl):
                     with cls.scope(f"inline {field.type.cpp_type} {field.name}() const {{", "}") as func:
                       func.write(f"return {field.type.cpp_type}(data_->{field.name}, data_->{field.name} + data_->num_{field.name});")
                 else:
-                    cls.write(f"ArrayAccessor<{field.type.c_type}, {element_type.cpp_type}> {field.name}();")
-                    with impl.scope(f"ArrayAccessor<{field.type.c_type}, {element_type.cpp_type}> {obj.__name__}Node::{field.name}() {{", "}") as func:
+                    element_ctype = field.type.element_type.c_type
+                    if field.type.element_type.python_type is str:
+                        element_ctype = element_type.rstrip("*")  # String is special-cased list-of-lists
+                    cls.write(f"ArrayAccessor<{element_ctype}*, {element_type.cpp_type}> {field.name}();")
+                    with impl.scope(f"ArrayAccessor<{element_ctype}*, {element_type.cpp_type}> {obj.__name__}Node::{field.name}() {{", "}") as func:
                         func.write(
                             f"if ({field.name}_refs_.get() == nullptr) {{ {field.name}_refs_.reset(new ::std::vector<{element_type.cpp_type}>()); }}")
                         func.write(
-                            f"return ArrayAccessor<{field.type.c_type}, {element_type.cpp_type}>(&data_->{field.name}, data_->num_{field.name}, {field.name}_refs_);")
+                            f"return ArrayAccessor<{element_ctype}*, {element_type.cpp_type}>(&data_->{field.name}, data_->num_{field.name}, {field.name}_refs_);")
             else:
                 cls.write(f"inline {field.type.cpp_type} {field.name}() const {{ return {field.type.cpp_type}(data_->{field.name}); }}")
 
@@ -346,7 +358,8 @@ def generate_class(obj, header, impl):
     with header.scope(f"\nclass {obj.__name__} : public MetadataBase {{", "};") as cls:
         cls.write("public:", adjust=-1)
         cls.write(f"{obj.__name__}(const struct ::TVM{obj.__name__}* data);")
-        cls.write(f"TVM_DEFINE_OBJECT_REF_METHODS({obj.__name__}, MetadataBase, {obj.__name__}Node);")
+        # use MUTABLE to allow use of the ArrayAccessor methods from InMemory* classes.
+        cls.write(f"TVM_DEFINE_MUTABLE_OBJECT_REF_METHODS({obj.__name__}, MetadataBase, {obj.__name__}Node);")
 
     impl.write(f"{obj.__name__}::{obj.__name__}(const struct ::TVM{obj.__name__}* data) :")
     impl.write(f"MetadataBase{{make_object<{obj.__name__}Node>(data)}} {{}}", adjust=4)
@@ -357,8 +370,13 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
         f"\nclass InMemory{obj.__name__}Node : public ::tvm::runtime::metadata::{obj.__name__}Node {{")
     with header.scope(cls_def, "};") as cls:
         cls.write(f"public:", adjust=-1)
-        cls.write(f"InMemory{obj.__name__}Node(")
+        cls.write(f"InMemory{obj.__name__}Node() : InMemory{obj.__name__}Node(")
         metadata_fields = MetadataFields.from_metadata(obj)
+        for i, field in enumerate(metadata_fields):
+            cls.write(f"{field.type.zero_value}{',' if i < len(obj._FIELDS) - 1 else ''}", adjust=6)
+        cls.write("    ) {}")
+
+        cls.write(f"InMemory{obj.__name__}Node(")
         for i, field in enumerate(metadata_fields):
             cls.write(f"{field.type.cpp_builder_type} {field.name}{',' if i < len(obj._FIELDS) - 1 else ''}", adjust=6)
         cls.write(") : ", adjust=4)
@@ -409,12 +427,12 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
                     visit.write(f"storage_.{field.name} = {field.name}_dtype;")
                 elif field.type.is_array:
                     visit.write(textwrap.dedent(f"""\
-                        ::tvm::runtime::Array<{field.type.element_type.prim_expr_ref_type}> {field.name}_array;
+                        auto {field.name}_array = Array<{field.type.element_type.prim_expr_ref_type}>();
                         auto {field.name}_accessor = {field.name}();
                         {field.name}_array.reserve(num_{field.name}());"""))
                     with visit.scope(f"for (int64_t i = 0; i < num_{field.name}(); ++i) {{", "}") as for_scope:
                         element_type = field.type.element_type
-                        if element_type.is_primitive:
+                        if element_type.is_primitive or element_type.python_type is str:
                             visit.write(f"{field.name}_array.push_back({field.type.element_type.prim_expr_ref_type}{{{field.name}_accessor[i]}});")
                         elif element_type.is_array:
                             raise TypeError("list of list not supported")
@@ -422,7 +440,8 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
                             visit.write(f"{field.name}_array.push_back({field.type.element_type.prim_expr_ref_type}{{{field.name}_accessor[i]}});")
                         else:
                             raise TypeError(f"no such type: {element_type}")
-                    visit.write(f'v->Visit("{field.name}", &{field.name}_array);')
+                    visit.write(f'::tvm::runtime::metadata::MetadataArray {field.name}_metadata_array{{{field.name}_array.GetArrayNode(), "{field.type.c_type}"}};')
+                    visit.write(f'v->Visit("{field.name}", &{field.name}_metadata_array);')
                 elif field.type.is_object:
                     visit.write(f'v->Visit("{field.name}", &{field.name}_);')
                 elif field.type.python_type is str:
@@ -482,6 +501,7 @@ def main(argv):
     def _add_obj(o):
         if issubclass(o, MetadataBase) and o not in seen:
             to_visit.append(o)
+            seen.add(o)
 
     while to_visit:
         obj = to_visit.pop()
@@ -502,6 +522,9 @@ def main(argv):
         guard_scope.write("#include <inttypes.h>")
         guard_scope.write("#include <tvm/runtime/c_runtime_api.h>")
         guard_scope.write("#include <tvm/support/span.h>")
+        guard_scope.write(textwrap.dedent(f"""\
+            #define TVM_METADATA_VERSION {VERSION}
+            static const constexpr int64_t kMetadataVersion = TVM_METADATA_VERSION;"""))
         guard_scope.write(textwrap.dedent("""\
             #ifdef __cplusplus
             extern "C" {
@@ -540,7 +563,8 @@ def main(argv):
         header_ns_scope = cc_stack.enter_context(
             namespace_scope(guard_scope, ["tvm", "runtime", "metadata"]))
 
-        cc_impl.write(f'#include "{args.compiler_header.name}"')
+        # TODO path doesn't need to be here?
+        cc_impl.write(f'#include <tvm/generated/target/metadata.h>')
         impl_ns_scope = cc_stack.enter_context(
             namespace_scope(cc_impl, ["tvm", "target", "metadata"]))
 

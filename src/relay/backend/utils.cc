@@ -264,6 +264,7 @@ void UpdateAutoSchedulerOpWeights(tec::TECompiler compiler) {
     }
     (*te_compiler_update_weights)(weight_map);
   }
+}
 
 std::vector<int64_t> ShapeToJSON(tvm::Array<IndexExpr> shape) {
   std::vector<int64_t> ret;

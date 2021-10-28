@@ -25,6 +25,7 @@
 #include "compiler.h"
 
 #include <tvm/driver/driver_api.h>
+#include <tvm/generated/target/metadata.h>
 #include <tvm/ir/error.h>
 #include <tvm/relay/analysis.h>
 #include <tvm/relay/attrs/device_copy.h>
@@ -1144,7 +1145,7 @@ void VMCompiler::Codegen() {
     // to make sure a DSO module will be also available.
     lib = codegen::CSourceModuleCreate(";", "", Array<String>{});
   }
-  lib = codegen::CreateMetadataModule(params_, lib, ext_mods, target_host_, runtime::Metadata());
+  lib = codegen::CreateMetadataModule(params_, lib, ext_mods, target_host_, runtime::metadata::Metadata(make_object<runtime::metadata::InMemoryMetadataNode>()));
   exec_->SetLib(lib);
 }
 

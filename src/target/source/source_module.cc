@@ -193,7 +193,7 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
   void GenerateEntrypointForUnpackedAPI(const std::string& entrypoint_name,
                                         const std::string& run_func) {
     code_ << "TVM_DLL int32_t " << run_func << "(";
-    unsigned int total_args = (metadata_->input_names.size() + metadata_->num_outputs);
+    unsigned int total_args = (metadata_->num_inputs() + metadata_->num_outputs());
     for (unsigned int i = 0; i < total_args; ++i) {
       code_ << "void* arg" << i;
       if (i + 1 != total_args) {
@@ -205,13 +205,13 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
     code_ << "(void* args, void* type_code, int num_args, void* out_value, void* "
              "out_type_code, void* resource_handle) {\n";
     code_ << "return " << run_func << "(";
-    for (unsigned int i = 0; i < metadata_->input_names.size(); ++i) {
+    for (unsigned int i = 0; i < metadata_->num_inputs(); ++i) {
       code_ << "((DLTensor*)(((TVMValue*)args)[" << i << "].v_handle))[0].data,";
     }
-    for (int i = 0; i < metadata_->num_outputs; ++i) {
-      int j = metadata_->input_names.size() + i;
+    for (int i = 0; i < metadata_->num_outputs(); ++i) {
+      int j = metadata_->num_inputs() + i;
       code_ << "((DLTensor*)(((TVMValue*)args)[" << j << "].v_handle))[0].data";
-      if (i + 1 != metadata_->num_outputs) {
+      if (i + 1 != metadata_->num_outputs()) {
         code_ << ",";
       }
     }
@@ -238,7 +238,7 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
                                     const std::string& mod_name) {
     code_ << "#include <" << mod_name << ".h>\n";
     code_ << "TVM_DLL int32_t " << run_func << "(";
-    unsigned int total_args = (metadata_->input_names.size() + metadata_->num_outputs);
+    unsigned int total_args = (metadata_->num_inputs() + metadata_->num_outputs());
     for (unsigned int i = 0; i < total_args; ++i) {
       code_ << "void* arg" << i;
       if (i + 1 != total_args) {
@@ -251,17 +251,17 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
           << "struct " << runtime::get_name_mangled(mod_name, "outputs") << "* outputs"
           << ") {";
     code_ << "return " << run_func << "(";
-    for (const auto& input : metadata_->input_names) {
-      std::string sanitised_input = input;
+    for (runtime::metadata::TensorInfo input : metadata_->inputs()) {
+      std::string sanitised_input = input->name();
       std::replace_if(sanitised_input.begin(), sanitised_input.end(), isNotAlnum, '_');
       code_ << "inputs->" << sanitised_input << ",";
     }
-    if (metadata_->num_outputs == 1) {
+    if (metadata_->num_outputs() == 1) {
       code_ << "outputs->output";
     } else {
-      for (int i = 0; i < metadata_->num_outputs; ++i) {
+      for (int i = 0; i < metadata_->num_outputs(); ++i) {
         code_ << "outputs->output" << i;
-        if (i + 1 != metadata_->num_outputs) {
+        if (i + 1 != metadata_->num_outputs()) {
           code_ << ",";
         }
       }
@@ -274,10 +274,10 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
     const std::string run_func_suffix = ::tvm::runtime::symbol::tvm_run_func_suffix;
     const std::string tvm_entrypoint_suffix = ::tvm::runtime::symbol::tvm_entrypoint_suffix;
     const std::string run_func_mangled =
-        runtime::get_name_mangled(metadata_->mod_name, run_func_suffix);
+        runtime::get_name_mangled(metadata_->mod_name(), run_func_suffix);
     const std::string entrypoint_mangled =
-        runtime::get_name_mangled(metadata_->mod_name, tvm_entrypoint_suffix);
-    const std::string network_mangled = runtime::get_name_mangled(metadata_->mod_name, "network");
+        runtime::get_name_mangled(metadata_->mod_name(), tvm_entrypoint_suffix);
+    const std::string network_mangled = runtime::get_name_mangled(metadata_->mod_name(), "network");
     auto unpacked_api = target_->GetAttr<Bool>("unpacked-api").value_or(Bool(false));
     auto interface_api = target_->GetAttr<String>("interface-api").value_or(String("packed"));
 
@@ -288,7 +288,7 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
 
     if (unpacked_api) {
       if (interface_api == "c") {
-        GenerateCInterfaceEntrypoint(entrypoint_mangled, run_func_mangled, metadata_->mod_name);
+        GenerateCInterfaceEntrypoint(entrypoint_mangled, run_func_mangled, metadata_->mod_name());
       } else {
         GenerateEntrypointForUnpackedAPI(entrypoint_mangled, run_func_mangled);
       }
@@ -307,7 +307,7 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
       CreateFuncRegistry();
       GenerateCrtSystemLib();
     }
-    if (metadata_.defined() && metadata_->executor == runtime::kTvmExecutorAot) {
+    if (metadata_.defined() && metadata_->executor() == runtime::kTvmExecutorAot) {
       GenerateAOTDescriptor();
     }
     code_ << ";";
@@ -315,7 +315,7 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
 };
 
 
-class CMetadataWriterVisitor : public ::tvm::AttrVistor {
+class CMetadataWriterVisitor : public ::tvm::AttrVisitor {
  private:
   std::stringstream struct_defs_;
 
@@ -343,7 +343,7 @@ class CMetadataWriterVisitor : public ::tvm::AttrVistor {
   }
 
   void Visit(const char* key, std::string* value) override {
-    (*current_stream_) << "\"" << value->replace("\\", "\\\\").replace("\"", "\\\"") << "\"";
+    (*current_stream_) << "\"" << value << "\"";  // todo: ->replace('\\', "\\\\").replace('\"', "\\\"") << "\"";
   }
 
   void Visit(const char* key, void** value) override {
@@ -359,7 +359,8 @@ class CMetadataWriterVisitor : public ::tvm::AttrVistor {
   }
 
   void Visit(const char* key, runtime::ObjectRef* value) override {
-    if (value->as<
+//    if (value->as<
+    // todo
   }
 
 };
@@ -407,39 +408,79 @@ class MetadataStructDefiner : public AttrVisitor {
     ICHECK(false) << "do not support serializing NDArray as metadata";
   }
 
-  void Visit(const char* key, ObjectRef* value) final {
-    Array* arr = value->as<Array>();
-    if (arr != nullptr) {
-      // dns: mangle name
+  void WriteComma() {
+    if (!is_first_item_) {
+      code_ << ", ";
+    }
+  }
 
-      code_ << "  " <<  "" << key << ";" << std::endl;
-      WriteComma();
-      code_ << "{";
-      if (arr->size() > 0) {
-        is_first_item_ = true;
-        for (ObjectRef* o : *arr) {
-          // todo might have to switch on object type.
-          WriteComma();
-          ReflectionVTable::Global()->VisitAttrs(o.get(), this);
-        }
-      }
-      code_ << "}";
+  void VisitArray(const char* key, const runtime::metadata::MetadataArrayNode* array) {
+    code_ << "  " << array->c_type << "* " << key << ";" << std::endl;
+  }
+  //   switch (array->type_index) {
+  //   case MetadataTypeIndex::kUint64:
+  //     code_ << "  uint64_t** " << key << ";" << std::endl;
+  //   case MetadataTypeIndex::kInt64:
+  //     code_ << "  int64_t** " << key << ";" << std::endl;
+  //   case MetadataTypeIndex::kString:
+  //     code_ << "  const char** " << key << ";" << std::endl;
+  //   case MetadataTypeIndex::kHandle:
+  //     code_ << "  void** " << key << ";" << std::endl;
+  //   default:
+  //     CHECK(false) << "Field " << key << ": unknown MetadataTypeIndex: " << array->type_index;
+  //   }
+  // }
+
+
+  //   const ArrayNode* arr = value->as<ArrayNode>();
+  //   if (arr != nullptr) {
+  //     // dns: mangle name
+
+  //     code_ << "  " <<  "" << key << ";" << std::endl;
+  //     WriteComma();
+  //     code_ << "{";
+  //     if (arr->size() > 0) {
+  //       is_first_item_ = true;
+  //       for (ObjectRef o : *arr) {
+  //         // todo might have to switch on object type.
+  //         WriteComma();
+  //         ReflectionVTable::Global()->VisitAttrs(o.get(), this);
+  //       }
+  //     }
+  //     code_ << "}";
+  //     return;
+  //   }
+  // }
+
+  void Visit(const char* key, ObjectRef* value) final {
+    auto metadata = Downcast<runtime::metadata::MetadataBase>(*value);
+    auto arr = metadata.as<runtime::metadata::MetadataArrayNode>();
+    if (arr != nullptr) {
+      VisitArray(key, arr);
       return;
     }
 
-    code_ << "{";
     auto old_is_first_item = is_first_item_;
     is_first_item_ = true;
-    MetadataBase metadata = Downcast<MetadataBase>(value);
-    metadata->VisitAttrs(this);
-    is_first_item = old_is_first_item_;
+    code_ << "{";
+    ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
+    code_ << "}";
+    is_first_item_ = old_is_first_item;
   }
 
+  std::string GetOutput() {
+    return code_.str();
+  }
+
+ private:
+  ::std::stringstream code_;
+  bool is_first_item_;
+};
 
 
 class MetadataSerializer : public AttrVisitor {
 public:
-  MetadataSerializer(std::ostream& decl, std::ostream& code) : decl_{decl}, code_{code}, is_first_item_{true} {}
+  MetadataSerializer() : is_first_item_{true} {}
 
   void WriteComma() {
     if (is_first_item_) {
@@ -482,7 +523,7 @@ public:
   }
   void Visit(const char* key, DataType* value) final {
     WriteComma();
-    code_ << "DLDataType{" << value->code() << ", " << value->type() << ", "
+    code_ << "DLDataType{" << value->code() << ", " << value->bits() << ", "
           << value->lanes() << "} /* " << key << " */";
   }
 
@@ -491,64 +532,96 @@ public:
     ICHECK(false) << "do not support serializing NDArray as metadata";
   }
 
-  void Visit(const char* key, ObjectRef* value) final {
-    Array* arr = value->as<Array>();
-    if (arr != nullptr) {
-      WriteComma();
-      code_ << "{";
-      if (arr->size() > 0) {
-        is_first_item_ = true;
-        for (ObjectRef* o : *arr) {
-          // todo might have to switch on object type.
-          WriteComma();
-          ReflectionVTable::Global()->VisitAttrs(o.get(), this);
-        }
+  void VisitArray(const runtime::metadata::MetadataArrayNode* array) {
+    for (ObjectRef o : *(array->array)) {
+      auto type_index = o->RuntimeTypeIndex();
+      static auto int_type_index = IntImmNode::RuntimeTypeIndex();
+      if (type_index == int_type_index) {
+        int64_t i = Downcast<Integer>(o);
+        Visit(nullptr, &i);
+        return;
       }
-      code_ << "}";
+
+      static auto str_type_index = StringObj::RuntimeTypeIndex();
+      if (type_index == str_type_index) {
+        std::string s = Downcast<String>(o);
+        Visit(nullptr, &s);
+        return;
+      }
+
+      runtime::metadata::MetadataBase metadata = Downcast<runtime::metadata::MetadataBase>(o);
+      ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
+    }
+  }
+
+  void Visit(const char* key, ObjectRef* value) final {
+    const runtime::metadata::MetadataArrayNode* arr = value->as<runtime::metadata::MetadataArrayNode>();
+    if (arr != nullptr) {
+      VisitArray(Downcast<runtime::metadata::MetadataArray>(*value).operator->());
+      // WriteComma();
+      // code_ << "{";
+      // if (arr->size() > 0) {
+      //   is_first_item_ = true;
+      //   for (ObjectRef* o : *arr) {
+      //     // todo might have to switch on object type.
+      //     WriteComma();
+      //     ReflectionVTable::Global()->VisitAttrs(o.get(), this);
+      //   }
+      // }
+      // code_ << "}";
       return;
     }
 
     code_ << "{";
     auto old_is_first_item = is_first_item_;
     is_first_item_ = true;
-    MetadataBase metadata = Downcast<MetadataBase>(value);
-    metadata->VisitAttrs(this);
-    is_first_item = old_is_first_item_;
+    runtime::metadata::MetadataBase metadata = Downcast<runtime::metadata::MetadataBase>(*value);
+    ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
+    is_first_item_ = old_is_first_item;
   }
 
-  void EnterStruct(MetadataBase metadata) {
-    const char* type_key = metadata->GetTypeKey();
-    is_defining_struct_.emplace_back(
-      !generated_struct_decls_.contains(type_key));
-    if (is_defining_struct()) {
-      decl_ << "struct " << get_struct_name(metadata) << "{";
-    }
-    is_first_item_.emplace_back(true);
+  // void EnterStruct(::tvm::runtime::metadata::MetadataBase metadata) {
+  //   const char* type_key = metadata->GetTypeKey();
+  //   is_defining_struct_.emplace_back(
+  //     !generated_struct_decls_.contains(type_key));
+  //   if (is_defining_struct()) {
+  //     decl_ << "struct " << get_struct_name(metadata) << "{";
+  //   }
+  //   is_first_item_.emplace_back(true);
+  // }
+
+  // void ExitStruct(::tvm::runtime::metadata::MetadataBase metadata) {
+  //   decl_ << "}; // struct " << get_struct_name(metadata);
+  //   is_first_item_.pop_back();
+  // }
+
+  void CodegenMetadata(::tvm::runtime::metadata::Metadata metadata) {
+//    EnterStruct(metadata);
+    ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
+//    ExitStruct(metadata);
   }
 
-  void CodegenMetadata(Metadata metadata) {
-    EnterStruct(metadata);
-    metadata->Visit(this);
-    ExitStruct(
+  std::string GetOutput() {
+    return decl_.str() + code_.str();
   }
 
 private:
-  std::ostream* decl_;
-  std::ostream* code_;
+  std::stringstream decl_;
+  std::stringstream code_;
   bool is_first_item_;
   std::unordered_set<std::string> generated_struct_decls_;
   std::vector<bool> is_defining_struct_;
 };
 
 
-class MetadataModuleNode : public runtime::ModuleNode {
+class CSourceCppMetadataModuleNode : public runtime::ModuleNode {
  public:
   CSourceCppMetadataModuleNode(runtime::metadata::Metadata metadata) {
-    metadata_ = metadata;
+    CreateSource(metadata);
   }
   const char* type_key() const { return "metadata"; }
 
-  std::string GetSource(const std::string& format) final { return code_.str(); }
+  std::string GetSource(const std::string& format) final { return code_; }
 
   PackedFunc GetFunction(const std::string& name, const ObjectPtr<Object>& sptr_to_self) final {
     return PackedFunc(nullptr);
@@ -558,7 +631,7 @@ class MetadataModuleNode : public runtime::ModuleNode {
     std::string fmt = GetFileFormat(file_name, format);
     ICHECK_EQ(fmt, "cc") << "Can only save to format=cc";
 
-    auto code_str = code_.str();
+    auto code_str = code_;
     ICHECK_NE(code_str.length(), 0);
 
     std::string meta_file = GetMetaFilePath(file_name);
@@ -566,23 +639,19 @@ class MetadataModuleNode : public runtime::ModuleNode {
   }
 
  protected:
-  std::stringstream decl_;
-  std::stringstream code_;
-
-  runtime::metadata::Metadata metadata_;
+  std::string code_;
 
   void CreateSource(runtime::metadata::Metadata metadata) {
-//    decl_ << "#include <tvm/runtime/object.h>" << std::endl;
-
-
-    for (FunctionInfo func : metadata->functions) {
-      CodegenFunction(func);
-    }
+    MetadataStructDefiner definer;
+    ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), &definer);
+    MetadataSerializer serializer;
+    ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), &serializer);
+    code_ = definer.GetOutput() + serializer.GetOutput();
   }
 };
 
 runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& modules, Target target,
-                                               runtime::Metadata metadata) {
+                                               runtime::metadata::Metadata metadata) {
   Array<String> func_names;
   for (runtime::Module mod : modules) {
     auto pf_funcs = mod.GetFunction("get_func_names");
@@ -601,8 +670,9 @@ runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& mod
   return std::move(csrc_metadata_module);
 }
 
-runtime::Module CreateCSourceCppMetadataModule(Metadata metadata) {
-  return make_object<CSourceCppMetadataModule>(metadata);
+runtime::Module CreateCSourceCppMetadataModule(runtime::metadata::Metadata metadata) {
+  auto n = make_object<CSourceCppMetadataModuleNode>(metadata);
+  return runtime::Module(std::move(n));
 }
 
 // supports limited save without cross compile
@@ -669,12 +739,12 @@ TVM_REGISTER_GLOBAL("runtime.CSourceModuleCreate")
 TVM_REGISTER_GLOBAL("runtime.CreateCSourceCrtMetadataModule")
     .set_body_typed([](const Array<runtime::Module>& modules, Target target) {
       // Note that we don't need metadata when we compile a single operator
-      return CreateCSourceCrtMetadataModule(modules, target, runtime::Metadata());
+      return CreateCSourceCrtMetadataModule(modules, target, runtime::metadata::Metadata());
     });
 
 TVM_REGISTER_GLOBAL("runtime.CreateCSourceCppMetadataModule")
-    .set_body_typed([](::tvm::target::metdata::Metadata metadata) {
-      return make_object<CSourceCppMetadataModuleNode>(metadata);
+.set_body_typed([](::tvm::runtime::metadata::Metadata metadata) {
+      return runtime::Module(make_object<CSourceCppMetadataModuleNode>(metadata));
     });
 
 }  // namespace codegen
