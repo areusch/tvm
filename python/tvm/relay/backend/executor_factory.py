@@ -86,7 +86,7 @@ class AOTExecutorFactoryModule(ExecutorFactoryModule):
     """
 
     def __init__(self, ir_mod, target, libmod, libmod_name, params, function_metadata):
-        fcreate = get_global_func("tvm.graph_executor_factory.create")
+        fcreate = get_global_func("tvm.aot_executor_factory.create")
         args = []
         for k, v in params.items():
             args.append(k)
@@ -94,12 +94,15 @@ class AOTExecutorFactoryModule(ExecutorFactoryModule):
 
         self.ir_mod = ir_mod
         self.target = target
-        self.module = fcreate(graph_json_str, libmod, libmod_name, str(target), *args)
+        self.module = fcreate(libmod, libmod_name, *args)
         self.lib = libmod
         self.libmod_name = libmod_name
         self.params = params
         self.iter_cnt = 0
         self.function_metadata = function_metadata
+
+    def export_library(self, file_name, fcompile=None, addons=None, **kwargs):
+        return self.module.export_library(file_name, fcompile, addons, **kwargs)
 
     def get_params(self):
         return self.params

@@ -273,12 +273,14 @@ def get_executor_from_target(target, target_host):
     # Default executor is graph
     executor = "graph"
     cpu_device_type = 1
+    print('get from target', target_host, target)
     if target_host:
         executor = target_host.attrs.get("executor", "graph")
     else:
         for device_type in target:
             if device_type == cpu_device_type:
                 executor = target[device_type].attrs.get("executor", "graph")
+    print('get from target -> ', executor)
     return executor
 
 
@@ -332,7 +334,9 @@ def build(ir_mod, target=None, target_host=None, params=None, mod_name="default"
             "instead of deprecated parameter mod (tvm.relay.function.Function)",
             DeprecationWarning,
         )
+    print('pre-build target', target)
     target = build_target_by_device_type_map(target)
+    print('build target', target)
     if isinstance(target_host, (str, Target)):
         target_host = Target(target_host)
     elif target_host:

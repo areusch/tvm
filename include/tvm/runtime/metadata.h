@@ -34,6 +34,8 @@ namespace metadata {
 
 class MetadataBaseNode : public ::tvm::runtime::Object {
  public:
+  virtual std::string get_name() = 0;
+
   static constexpr const char* _type_key = "metadata.MetadataBaseNode";
   TVM_DECLARE_BASE_OBJECT_INFO(MetadataBaseNode, ::tvm::runtime::Object);
 };
@@ -49,7 +51,7 @@ class ArrayAccessor;
 template <typename C, class Ref>
 class ArrayIterator {
  public:
-  ArrayIterator(int index, ArrayAccessor<C, Ref>* parent) : index_{index}, parent_{parent} {}
+  ArrayIterator(size_t index, ArrayAccessor<C, Ref>* parent) : index_{index}, parent_{parent} {}
 
   inline Ref operator*() {
     return (*parent_)[index_];
@@ -64,7 +66,7 @@ class ArrayIterator {
   }
 
   inline bool operator==(const ArrayIterator<C, Ref>& other) {
-    return parent_ == other.parent_ & index_ == other.index_;
+    return parent_ == other.parent_ && index_ == other.index_;
   }
 
   inline bool operator!=(const ArrayIterator<C, Ref>& other) {
@@ -72,7 +74,7 @@ class ArrayIterator {
   }
 
  private:
-  int index_;
+  size_t index_;
   ArrayAccessor<C, Ref>* parent_;
 };
 
@@ -81,13 +83,17 @@ class ArrayAccessor {
  public:
 
   template <typename T=typename std::enable_if<std::is_base_of<ObjectRef, Ref>::value>::type>
-  ArrayAccessor(const C* data, int num_data, ::std::shared_ptr<::std::vector<Ref>> refs) : data_{data}, num_data_{num_data}, refs_{refs} {}
+  ArrayAccessor(const C* data, size_t num_data, ::std::shared_ptr<::std::vector<Ref>> refs) : data_{data}, num_data_{num_data}, refs_{refs} {}
 
   inline size_t size() { return num_data_; }
 
-  inline Ref operator[](int index) {
+  inline Ref operator[](size_t index) {
     if (index >= num_data_) {
       throw std::runtime_error("Index out of range");
+    }
+
+    if (refs_->size() <= index) {
+      refs_->resize(num_data_);
     }
 
     if (!(*refs_)[index].defined()) {
@@ -107,7 +113,7 @@ class ArrayAccessor {
 
  private:
   const C* data_;
-  int num_data_;
+  size_t num_data_;
   ::std::shared_ptr<::std::vector<Ref>> refs_;
 };
 
@@ -137,6 +143,8 @@ class MetadataArrayNode : public MetadataBaseNode {
  public:
 //  MetadataArray(Array<ObjectRef> array, MetadataTypeIndex type_index) : array{array}, type_index{type_index} {}
   MetadataArrayNode(ArrayNode* array, const char* c_type) : array{array}, c_type{c_type} {}
+
+  std::string get_name() override;
 
   ArrayNode* array;
   const char* c_type;

@@ -324,6 +324,8 @@ def generate_class(obj, header, impl):
     with header.scope(f"\nclass {obj.__name__}Node : public MetadataBaseNode {{", "};") as cls:
         cls.write(f"public:", adjust=-1)
         cls.write(f"{obj.__name__}Node(const struct ::TVM{obj.__name__}* data) : data_{{data}} {{}}")
+        cls.write(f'static constexpr const char* _type_key = "metadata.{obj.__name__}Node";')
+        cls.write(f"std::string get_name() override;")
         metadata_fields = MetadataFields.from_metadata(obj)
         for field in metadata_fields:
             if field.type.is_array:
@@ -363,6 +365,8 @@ def generate_class(obj, header, impl):
 
     impl.write(f"{obj.__name__}::{obj.__name__}(const struct ::TVM{obj.__name__}* data) :")
     impl.write(f"MetadataBase{{make_object<{obj.__name__}Node>(data)}} {{}}", adjust=4)
+    impl.write(f'std::string {obj.__name__}Node::get_name() {{ return std::string{{"{obj.__name__}"}}; }}')
+    impl.write(f"TVM_REGISTER_OBJECT_TYPE({obj.__name__}Node);")
 
 
 def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer):
@@ -395,16 +399,22 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
             for i, field in enumerate(metadata_fields):
                 if field.type.is_primitive:
                     storage_init.write(f"{field.name}{', ' if i < len(metadata_fields) - 1 else ''}")
-                elif field.type.is_array or field.type.is_object:  # same accesor method
-                    storage_init.write(f"{field.name}_.get(){', ' if i < len(metadata_fields) - 1 else ''}")
-                    storage_init.write(f"{field.name}.size(){', ' if i < len(metadata_fields) - 1 else ''}")
+                elif field.type.is_array:
+                    storage_init.write(f"NULL, NULL{', ' if i < len(metadata_fields) - 1 else ''}")
+                elif field.type.is_object:
+                    storage_init.write(f"NULL{', ' if i < len(metadata_fields) - 1 else ''}")
                 elif field.type.python_type is str:
                     storage_init.write(f"{field.name}_.c_str(){', ' if i < len(metadata_fields) - 1 else ''}")
                 else:
                     assert False
         with cls.scope(f"    {obj.__name__}Node{{&storage_}} {{", "}") as init_scope:
             for i, field in enumerate(metadata_fields):
+                if field.type.is_object:
+                    storage_init.write(f"{field.name}_.get(){', ' if i < len(metadata_fields) - 1 else ''}")
                 if field.type.is_array:
+                    storage_init.write(f"storage_.{field.name} = {field.name}_.get();")
+                    storage_init.write(f"storage_.num_{field.name} = {field.name}.size();")
+
                     with init_scope.scope(f"for (int i = 0; i < {field.name}.size(); ++i) {{", "}") as for_scope:
                         if field.type.element_type.is_primitive:
                             for_scope.write(f"{field.name}_.get()[i] = {field.name}[i];")
@@ -450,7 +460,6 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
                     raise TypeError(f"Don't know how to codegen field {field.name} with type {field.type.python_type}")
 
         cls.write("\nprivate:", adjust=-1)
-        cls.write(f"struct ::TVM{obj.__name__} storage_;")
 
         # define non-primitive storage.
         for i, field in enumerate(metadata_fields):
@@ -458,6 +467,15 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
                 continue
 
             cls.write(f"{field.type.in_memory_storage_type} {field.name}_;")
+
+        # note: must come last due to C++ initialization order
+        cls.write(f"struct ::TVM{obj.__name__} storage_;")
+
+    impl.write(f"TVM_REGISTER_REFLECTION_VTABLE(InMemory{obj.__name__}Node, ::tvm::detail::ReflectionTrait<InMemory{obj.__name__}Node>) \
+      .set_creator([](const std::string&) -> ObjectPtr<Object> {{                     \
+        return ::tvm::runtime::make_object<InMemory{obj.__name__}Node>();                              \
+      }});")
+
 
 
 def path_arg(s):
@@ -564,9 +582,10 @@ def main(argv):
             namespace_scope(guard_scope, ["tvm", "runtime", "metadata"]))
 
         # TODO path doesn't need to be here?
-        cc_impl.write(f'#include <tvm/generated/target/metadata.h>')
+        cc_impl.write('#include <tvm/generated/target/metadata.h>\n'
+                      '#include <tvm/node/reflection.h>')
         impl_ns_scope = cc_stack.enter_context(
-            namespace_scope(cc_impl, ["tvm", "target", "metadata"]))
+            namespace_scope(cc_impl, ["tvm", "runtime", "metadata"]))
 
         for obj in traversal_order:
             generate_in_memory_class(obj, header_ns_scope, impl_ns_scope)

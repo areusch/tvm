@@ -27,6 +27,7 @@
 
 #include <cstddef>
 #include <iterator>
+#include <vector>
 
 namespace tvm {
 namespace support {
@@ -40,7 +41,7 @@ class Span {
       CHECK_GE(end, ptr);
     }
 
-    inline W& operator*() {
+    inline W operator*() {
       return W(*ptr_);
     }
 
@@ -77,6 +78,10 @@ class Span {
     T* to_return = begin_ + i;
     ICHECK_LT(to_return, end_) << "Span access out of bounds: " << i;
     return W(*to_return);
+  }
+
+  inline operator std::vector<W>() {
+    return std::vector<W>(begin(), end());
   }
 
  protected:

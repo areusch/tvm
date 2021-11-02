@@ -37,9 +37,16 @@ namespace codegen {
  * \brief Create C-runtime targeted metadata module for "c" backend.
  * \param modules Array of modules included in the compilation output.
  * \param target TVM target.
+ * \param metadata Compiler-generated metadata.
  */
 runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& modules,
                                                tvm::Target target, runtime::metadata::Metadata metadata);
+
+/*!
+ * \brief Create C++-runtime targeted metadata module for "c" backend.
+ * \param metadata Compiler-generated metadata.
+ */
+runtime::Module CreateCSourceCppMetadataModule(runtime::metadata::Metadata metadata);
 
 }  // namespace codegen
 }  // namespace tvm

@@ -320,7 +320,9 @@ class Module(object):
             module = stack.pop()
             if filter_func(module):
                 dso_modules.append(module)
+            print(f"COLLECT {module} -> {filter_func(module)}", module)
             for m in module.imported_modules:
+                print(f"IMPORT {module} -> {m}")
                 if m not in visited:
                     visited.add(m)
                     stack.append(m)
@@ -399,6 +401,7 @@ class Module(object):
         is_system_lib = False
         has_c_module = False
         llvm_target_triple = None
+        print("MODULES", modules)
         for index, module in enumerate(modules):
             if fcompile is not None and hasattr(fcompile, "object_format"):
                 if module.type_key == "c":

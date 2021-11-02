@@ -25,20 +25,30 @@
 
 #include "aot_executor.h"
 
+#include <tvm/runtime/c_runtime_api.h>
+
 namespace tvm {
 namespace runtime {
 
-AotExecutor::AotExecutor(const runtime::Metadata& meta_data, tvm::runtime::Module module,
-                         const std::vector<Device>& devs) :
-    meta_data_{meta_data}, module_{module}, devices_{devs} {
+AotExecutor::AotExecutor(tvm::runtime::Module module, const std::vector<Device>& devs) :
+    module_{module}, devices_{devs} {
 
-  for (int i = 0; i < meta_data_.input_names.size(); ++i) {
+  auto fmetadata = module->GetFunction("get_metadata");
+  CHECK(fmetadata != nullptr) << "Expected a module with PackedFunc get_metadata";
+  auto ret_value = fmetadata();
+  metadata_ = ret_value.AsObjectRef<tvm::runtime::metadata::Metadata>();
+
+  for (auto input : metadata_->inputs()) {
     // TODO(areusch): Encode device information in Metadata.
-    args_.emplace_back(NDArray::Empty(ShapeTuple(meta_data_.input_shapes[i]), meta_data_.input_dtype[i], devices_[0]));
+    args_.emplace_back(NDArray::Empty(ShapeTuple(input->shape()), input->dtype(), devices_[0]));
+  }
+
+  for (auto output : metadata_->outputs()) {
+    args_.emplace_back(NDArray::Empty(ShapeTuple(output->shape()), output->dtype(), devices_[0]));
   }
 }
 
-PackedFunc AotExecutor::GetFunction(std::string name, const ObjectPtr<Object>& sptr_to_self) {
+PackedFunc AotExecutor::GetFunction(const std::string& name, const ObjectPtr<Object>& sptr_to_self) {
   // Return member functions during query.
   if (name == "set_input") {
     return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
@@ -95,34 +105,6 @@ PackedFunc AotExecutor::GetFunction(std::string name, const ObjectPtr<Object>& s
         [sptr_to_self, this](TVMArgs args, TVMRetValue* rv) { *rv = this->NumInputs(); });
   } else if (name == "run") {
     return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) { this->Run(); });
-  } else if (name == "run_from_inputs") {
-    return PackedFunc(
-        [sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
-          CHECK(args.size() % 2 == 0)
-              << "Number of arguments to run_from_inputs must be an even number of key-value pairs";
-          Device host{static_cast<DLDeviceType>(args[0].operator int()), args[1].operator int()};
-          for (int i = 2; i < args.size(); i += 2) {
-            if (String::CanConvertFrom(args[i])) {
-              int in_idx = this->GetInputIndex(args[i].operator String());
-              if (in_idx >= 0) {
-                this->SetInput(in_idx, args[i + 1]);
-              } else {
-                LOG(FATAL) << args[i].operator String() << " is not a valid input name";
-              }
-            } else {
-              this->SetInput(args[i], args[i + 1]);
-            }
-          }
-          this->Run();
-          Array<NDArray> outputs;
-          for (int i = 0; i < this->NumOutputs(); i++) {
-            NDArray out = this->GetOutput(i);
-            NDArray a = NDArray::Empty(out.Shape(), out.DataType(), host);
-            a.CopyFrom(out);
-            outputs.push_back(a);
-          }
-          *rv = outputs;
-        });
   } else if (name == "get_input_index") {
     return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
       CHECK(String::CanConvertFrom(args[0])) << "Input key is not a string";
@@ -134,29 +116,41 @@ PackedFunc AotExecutor::GetFunction(std::string name, const ObjectPtr<Object>& s
 }
 
 void AotExecutor::Run() {
-  auto pf = module_.GetFunction(meta_data_.mod_name);
-  ICHECK_NE(pf, nullptr) << "Module entrypoint is not defined";
+  auto pf = module_.GetFunction(metadata_->mod_name());
+  ICHECK(pf != nullptr) << "Module entrypoint is not defined";
 
-  const int num_args = meta_data_.input_names.size() + 1; // return values
+  const int num_args = args_.size();
   TVMValue call_values[num_args];
-  TVMValue call_type_codes[num_args];
-  for (int i = 0; i < meta_data_.input_names.size(); ++i) {
+  int call_type_codes[num_args];
+  for (int i = 0; i < num_args; ++i) {
     auto managed = args_[i].ToDLPack();
-    call_values[i] = managed->dl_tensor;
+    call_values[i].v_handle = &managed->dl_tensor;
     call_type_codes[i] = kTVMDLTensorHandle;
   }
 
   TVMArgs args{call_values, call_type_codes, num_args};
   TVMRetValue rv;
-  pf(args, &rv);
+  pf.CallPacked(args, &rv);
 }
 
 int AotExecutor::GetInputIndex(const std::string& name) {
-  return std::find(meta_data_.input_names.begin(), meta_data_.input_names.end(), name);
+  auto inputs = metadata_->inputs();
+  for (unsigned int i = 0; i < inputs.size(); i++) {
+    if (inputs[i]->name() == name) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 int AotExecutor::GetOutputIndex(const std::string& name) {
-  return 0;
+  auto outputs = metadata_->outputs();
+  for (unsigned int i = 0; i < outputs.size(); i++) {
+    if (outputs[i]->name() == name) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 void AotExecutor::SetInput(int index, DLTensor* data_ref) {
@@ -171,12 +165,12 @@ void AotExecutor::SetOutputZeroCopy(int index, DLTensor* data_ref) {
   ICHECK(false) << "not implemented";
 }
 
-int AotExecutor::NumOutputs() {
-  return 1;
+int AotExecutor::NumOutputs() const {
+  return metadata_->num_outputs();
 }
 
-int AotExecutor::NumInputs() {
-  return args_.size() - 1;
+int AotExecutor::NumInputs() const {
+  return metadata_->num_inputs();
 }
 
 NDArray AotExecutor::GetInput(int index) const {
@@ -184,7 +178,7 @@ NDArray AotExecutor::GetInput(int index) const {
 }
 
 NDArray AotExecutor::GetOutput(int index) const {
-  return args_[args_.size() - 1];
+  return args_[metadata_->num_inputs() + index];
 }
 
 void AotExecutor::CopyOutputTo(int index, DLTensor* data_out) {
