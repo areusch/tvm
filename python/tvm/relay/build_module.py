@@ -335,6 +335,7 @@ def _deprecated_target_param_warning(registry, param):
     )
 
 
+
 def _deprecated_target_sub_param_warning(registry, param):
     warnings.warn(
         f"Please use {registry} (tvm.relay.backend.{registry}) parameter {param} "
@@ -421,6 +422,7 @@ def build(
     )
 
     target = build_target_by_device_type_map(target)
+    print('build target', target)
     if isinstance(target_host, (str, Target)):
         target_host = Target(target_host)
     elif target_host:

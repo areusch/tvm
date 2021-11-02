@@ -176,7 +176,10 @@ class AOTOnDemandAllocator : public transform::DeviceAwareExprVisitor {
       }
       return_ttypes_.clear();
       auto ttypes = FlattenTupleType(e->checked_type());
-      std::copy(ttypes.begin(), ttypes.end(), return_ttypes_.begin());
+      return_ttypes_.reserve(ttypes.size());
+      for (auto ttype : ttypes) {
+        return_ttypes_.push_back(ttype);
+      }
     }
   }
   /*!
@@ -236,6 +239,7 @@ class AOTOnDemandAllocator : public transform::DeviceAwareExprVisitor {
     std::vector<int64_t> storage_ids;
     std::vector<SEScope> se_scopes;
     std::vector<int64_t> storage_sizes_in_bytes;
+    std::cout << "Flatten:  " << expr->checked_type() << std::endl;
     for (const auto& ttype : FlattenTupleType(expr->checked_type())) {
       storage_ids.push_back(next_available_sid_++);
       se_scopes.push_back(se_scope);
@@ -882,7 +886,7 @@ class AOTExecutorCodegen : public MixedModeVisitor {
 
     std::vector<runtime::metadata::TensorInfo> outputs;
     auto output_ttypes = final_aot_allocator.GetReturnTtypes();
-    for (int i = 0; i < output_ttypes.size(); i++) {
+    for (unsigned int i = 0; i < output_ttypes.size(); i++) {
       auto ttype = Downcast<TensorType>(output_ttypes[i]);
       std::stringstream name;
       name << "output" << i;
@@ -891,9 +895,9 @@ class AOTExecutorCodegen : public MixedModeVisitor {
           make_object<runtime::metadata::InMemoryTensorInfoNode>(
             name.str(), ShapeToJSON(ttype->shape), ttype->dtype)));
     }
-    ret.metadata = runtime::metadata::Metadata(
-      make_object<runtime::metadata::InMemoryMetadataNode>(
-        kMetadataVersion, inputs, outputs, ListDevices(), runtime::kTvmExecutorAot, mod_name, interface_api, use_unpacked_api_));
+    auto n = make_object<runtime::metadata::InMemoryMetadataNode>(
+        kMetadataVersion, inputs, outputs, ListDevices(), runtime::kTvmExecutorAot, mod_name, interface_api, use_unpacked_api_);
+    ret.metadata = runtime::metadata::Metadata(std::move(n));
     return ret;
   }
 

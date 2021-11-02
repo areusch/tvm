@@ -93,7 +93,13 @@ static runtime::Module CreateCppMetadataModule(runtime::Module target_module, Ta
 
   if (target->GetAttr<String>("executor").value_or("") == "aot" &&
       target->GetAttr<String>("runtime").value_or(kTvmRuntimeCpp) == kTvmRuntimeCpp) {
-//    runtime::Module metadata_module =
+    if (target->kind->name == "c") {
+      auto metadata_module = CreateCSourceCppMetadataModule(metadata);
+      metadata_module->Import(target_module);
+      target_module = metadata_module;
+    } else {
+      CHECK(false) << "Don't know how to create MetadataModule for target type " << target->str();
+    }
   }
 
   return target_module;
@@ -165,5 +171,7 @@ runtime::Module CreateMetadataModule(
   }
 }
 
+
 }  // namespace codegen
+
 }  // namespace tvm

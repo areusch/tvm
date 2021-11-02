@@ -27,11 +27,11 @@
 
 #include <string>
 #include <vector>
+#include <tvm/runtime/metadata.h>
 #include <tvm/runtime/module.h>
 #include <tvm/runtime/packed_func.h>
 #include <tvm/runtime/object.h>
 
-#include "../meta_data.h"
 
 namespace tvm {
 namespace runtime {
@@ -56,7 +56,6 @@ class TVM_DLL AotExecutor : public ModuleNode {
 
   /*!
    * \brief Initialize the AOT executor with metadata, runtime::Module, and device.
-   * \param meta_data Metadata given from the compiler.
    * \param module The module containing the compiled functions for the host
    *  processor.
    * \param devs The device of the host and devices where graph nodes will be
@@ -65,8 +64,7 @@ class TVM_DLL AotExecutor : public ModuleNode {
    *  by storage_id. If not given, linked parameters are looked-up using an internal implementation,
    *  which is not compatible with RPCModules. Default is nullptr.
    */
-  AotExecutor(const runtime::Metadata& meta_data, tvm::runtime::Module module,
-              const std::vector<Device>& devs);
+  AotExecutor(tvm::runtime::Module module, const std::vector<Device>& devs);
 
   /*!
    * \brief Get the input index given the name of input.
@@ -135,7 +133,7 @@ class TVM_DLL AotExecutor : public ModuleNode {
 
  private:
   /*! \brief Metadata provided to the runtime from the compiler. */
-  Metadata meta_data_;
+  metadata::Metadata metadata_;
 
   /*! \brief Runtime module which contains the AOT top-level function. */
   Module module_;
@@ -144,7 +142,7 @@ class TVM_DLL AotExecutor : public ModuleNode {
   std::vector<Device> devices_;
 
   /*! \brief Holds one NDArray per function argument in the same order. */
-  std::vector<NDArray> ndarray_;
+  std::vector<NDArray> args_;
 };
 
 }  // namespace runtime

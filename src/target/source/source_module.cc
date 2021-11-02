@@ -503,12 +503,15 @@ class MetadataStructDefiner : public AttrVisitor {
 
 class MetadataSerializer : public AttrVisitor {
 public:
+  static constexpr const char* kGlobalSymbol = "kTvmgenMetadata";
+
   MetadataSerializer() : is_first_item_{true} {}
 
   void WriteComma() {
     if (is_first_item_) {
-      code_ << ", " << std::endl;
       is_first_item_ = false;
+    } else {
+      code_ << ", " << std::endl;
     }
   }
 
@@ -556,29 +559,37 @@ public:
   }
 
   void VisitArray(const runtime::metadata::MetadataArrayNode* array) {
-    for (ObjectRef o : *(array->array)) {
-      auto type_index = o->RuntimeTypeIndex();
-      static auto int_type_index = IntImmNode::RuntimeTypeIndex();
-      if (type_index == int_type_index) {
-        int64_t i = Downcast<Integer>(o);
-        Visit(nullptr, &i);
-        return;
+    std::cout << "visit array " << array << " " << array->array->size() << std::endl;
+    WriteComma();
+    code_ << "{";
+    for (unsigned int i = 0; i < array->array->size(); ++i) { //ObjectRef o : *(array->array)) {
+      if (i > 0) {
+        code_ << ", ";
       }
 
-      static auto str_type_index = StringObj::RuntimeTypeIndex();
-      if (type_index == str_type_index) {
+      ObjectRef o = array->array->at(i);
+      if (o->IsInstance<IntImmNode>()) {
+        int64_t i = Downcast<Integer>(o);
+        Visit("", &i);
+        continue;
+      }
+
+      if (o->IsInstance<StringObj>()) {
         std::string s = Downcast<String>(o);
-        Visit(nullptr, &s);
-        return;
+        Visit("", &s);
+        continue;
       }
 
       runtime::metadata::MetadataBase metadata = Downcast<runtime::metadata::MetadataBase>(o);
+      std::cout << "visit member " << metadata->get_name();
       ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
     }
+    code_ << "}";
   }
 
   void Visit(const char* key, ObjectRef* value) final {
     const runtime::metadata::MetadataArrayNode* arr = value->as<runtime::metadata::MetadataArrayNode>();
+    std::cout << "Is array? " << arr << std::endl;
     if (arr != nullptr) {
       VisitArray(Downcast<runtime::metadata::MetadataArray>(*value).operator->());
       // WriteComma();
@@ -595,12 +606,16 @@ public:
       return;
     }
 
+    std::cout << "downcast..." << std::endl;
+    runtime::metadata::MetadataBase metadata = Downcast<runtime::metadata::MetadataBase>(*value);
+    std::cout << "downcast ok: " << metadata->get_name() << std::endl;
+
     code_ << "{";
     auto old_is_first_item = is_first_item_;
     is_first_item_ = true;
-    runtime::metadata::MetadataBase metadata = Downcast<runtime::metadata::MetadataBase>(*value);
     ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
     is_first_item_ = old_is_first_item;
+    code_ << "}";
   }
 
   // void EnterStruct(::tvm::runtime::metadata::MetadataBase metadata) {
@@ -619,9 +634,12 @@ public:
   // }
 
   void CodegenMetadata(::tvm::runtime::metadata::Metadata metadata) {
-//    EnterStruct(metadata);
+    decl_
+      << "#include <inttypes.h>" << std::endl
+      << "#include <tvm/runtime/c_runtime_api.h>" << std::endl;
+    code_ << "const struct TVMMetadata " << kGlobalSymbol << " = {";
     ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
-//    ExitStruct(metadata);
+    code_ << "};" << std::endl;
   }
 
   std::string GetOutput() {
@@ -634,43 +652,6 @@ private:
   bool is_first_item_;
   std::unordered_set<std::string> generated_struct_decls_;
   std::vector<bool> is_defining_struct_;
-};
-
-
-class CSourceCppMetadataModuleNode : public runtime::ModuleNode {
- public:
-  CSourceCppMetadataModuleNode(runtime::metadata::Metadata metadata) {
-    CreateSource(metadata);
-  }
-  const char* type_key() const { return "metadata"; }
-
-  std::string GetSource(const std::string& format) final { return code_; }
-
-  PackedFunc GetFunction(const std::string& name, const ObjectPtr<Object>& sptr_to_self) final {
-    return PackedFunc(nullptr);
-  }
-
-  void SaveToFile(const std::string& file_name, const std::string& format) final {
-    std::string fmt = GetFileFormat(file_name, format);
-    ICHECK_EQ(fmt, "cc") << "Can only save to format=cc";
-
-    auto code_str = code_;
-    ICHECK_NE(code_str.length(), 0);
-
-    std::string meta_file = GetMetaFilePath(file_name);
-    SaveBinaryToFile(file_name, code_str);
-  }
-
- protected:
-  std::string code_;
-
-  void CreateSource(runtime::metadata::Metadata metadata) {
-    MetadataStructDefiner definer;
-    ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), &definer);
-    MetadataSerializer serializer;
-    ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), &serializer);
-    code_ = definer.GetOutput() + serializer.GetOutput();
-  }
 };
 
 runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& modules, Target target,
@@ -694,8 +675,22 @@ runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& mod
 }
 
 runtime::Module CreateCSourceCppMetadataModule(runtime::metadata::Metadata metadata) {
-  auto n = make_object<CSourceCppMetadataModuleNode>(metadata);
-  return runtime::Module(std::move(n));
+//  MetadataStructDefiner definer;
+//  ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), &definer);
+  MetadataSerializer serializer;
+  ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), &serializer);
+  std::stringstream lookup_func;
+  lookup_func << "TVM_DLL int32_t get_c_metadata(TVMValue* arg_values, int* arg_tcodes, int num_args, TVMValue* ret_values, int* ret_tcodes, void* resource_handle) {" << std::endl;
+  lookup_func << "    ret_values[0].v_handle = &" << MetadataSerializer::kGlobalSymbol << ";" << std::endl;
+  lookup_func << "    ret_tcodes[0] = kTVMOpaqueHandle;" << std::endl;
+  lookup_func << "};" << std::endl;
+
+  auto mod = MetadataModuleCreate(metadata);
+  std::vector<String> func_names{"get_c_metadata"};
+  //definer.GetOutput() +
+  auto c = CSourceModuleCreate(serializer.GetOutput() + lookup_func.str(), "c", func_names, Array<String>());
+  mod->Import(c);
+  return mod;
 }
 
 // supports limited save without cross compile
@@ -764,11 +759,6 @@ TVM_REGISTER_GLOBAL("runtime.CreateCSourceCrtMetadataModule")
                        relay::Runtime runtime) {
       // Note that we don't need metadata when we compile a single operator
       return CreateCSourceCrtMetadataModule(modules, target, runtime, runtime::metadata::Metadata());
-    });
-
-TVM_REGISTER_GLOBAL("runtime.CreateCSourceCppMetadataModule")
-.set_body_typed([](::tvm::runtime::metadata::Metadata metadata) {
-      return runtime::Module(make_object<CSourceCppMetadataModuleNode>(metadata));
     });
 
 }  // namespace codegen
