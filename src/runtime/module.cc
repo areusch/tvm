@@ -109,10 +109,12 @@ const PackedFunc* ModuleNode::GetFuncFromEnv(const std::string& name) {
   auto it = import_cache_.find(name);
   if (it != import_cache_.end()) return it->second.get();
   PackedFunc pf;
-  for (Module& m : this->imports_) {
-    pf = m.GetFunction(name, true);
-    if (pf != nullptr) break;
-  }
+  pf = GetFunction(name, true);
+  // TODO(areusch): why do we only query imports here?
+  // for (Module& m : this->imports_) {
+  //   pf = m.GetFunction(name, true);
+  //   if (pf != nullptr) break;
+  // }
   if (pf == nullptr) {
     const PackedFunc* f = Registry::Get(name);
     ICHECK(f != nullptr) << "Cannot find function " << name

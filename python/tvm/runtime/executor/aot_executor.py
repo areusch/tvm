@@ -16,6 +16,8 @@
 # under the License.
 """A Python wrapper for the Module-based Model Runtime Interface for Ahead-of-Time compilation."""
 
+import numpy as np
+
 
 class AotModule(object):
     """Wraps the AOT executor runtime.Module.

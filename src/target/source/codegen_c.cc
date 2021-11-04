@@ -674,7 +674,7 @@ void CodeGenC::VisitExpr_(const CallNode* op, std::ostream& os) {  // NOLINT(*)
       ICHECK_EQ(op->args.size(), 1);
       const StringImmNode* str = op->args[0].as<StringImmNode>();
       ICHECK(str != nullptr);
-      os << "__tvm_param__" << str->value;
+      os << "(void*) __tvm_param__" << str->value;
     } else {
       LOG(FATAL) << "Unresolved call " << op->op;
     }

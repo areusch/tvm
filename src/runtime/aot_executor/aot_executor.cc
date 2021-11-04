@@ -40,11 +40,11 @@ AotExecutor::AotExecutor(tvm::runtime::Module module, const std::vector<Device>&
 
   for (auto input : metadata_->inputs()) {
     // TODO(areusch): Encode device information in Metadata.
-    args_.emplace_back(NDArray::Empty(ShapeTuple(input->shape()), input->dtype(), devices_[0]));
+    args_.emplace_back(NDArray::Empty(ShapeTuple(input->shape().begin(), input->shape().end()), input->dtype(), devices_[0]));
   }
 
   for (auto output : metadata_->outputs()) {
-    args_.emplace_back(NDArray::Empty(ShapeTuple(output->shape()), output->dtype(), devices_[0]));
+    args_.emplace_back(NDArray::Empty(ShapeTuple(output->shape().begin(), output->shape().end()), output->dtype(), devices_[0]));
   }
 }
 
@@ -116,7 +116,8 @@ PackedFunc AotExecutor::GetFunction(const std::string& name, const ObjectPtr<Obj
 }
 
 void AotExecutor::Run() {
-  auto pf = module_.GetFunction(metadata_->mod_name());
+  LOG(INFO) << "Get entrypoint " << metadata_->mod_name() << "_run_model";
+  auto pf = module_.GetFunction(metadata_->mod_name() + "_run_model", true /* query_imports */);
   ICHECK(pf != nullptr) << "Module entrypoint is not defined";
 
   const int num_args = args_.size();
