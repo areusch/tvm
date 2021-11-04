@@ -478,6 +478,65 @@ class MetadataStructDefiner : public AttrVisitor {
 };
 
 
+static std::string address_from_parts(const std::vector<std::string>& parts) {
+  std::stringstream ss;
+  for (unsigned int i = 0; i < parts.size(); ++i) {
+    if (i > 0) {
+      ss << "_";
+    }
+    ss << parts[i];
+  }
+  return ss.str();
+}
+
+class MetadataQueuer : public AttrVisitor {
+ public:
+  using QueueItem = std::tuple<std::string, runtime::metadata::MetadataBase>;
+  MetadataQueuer(std::vector<QueueItem>* queue) : queue_{queue} {}
+
+  void Visit(const char* key, double* value) final {}
+  void Visit(const char* key, int64_t* value) final {}
+  void Visit(const char* key, uint64_t* value) final {}
+  void Visit(const char* key, int* value) final {}
+  void Visit(const char* key, bool* value) final {}
+  void Visit(const char* key, std::string* value) final {}
+  void Visit(const char* key, DataType* value) final {}
+  void Visit(const char* key, runtime::NDArray* value) final {}
+  void Visit(const char* key, void** value) final {}
+
+  void Visit(const char* key, ObjectRef* value) final {
+    address_parts_.push_back(key);
+    if (value->as<runtime::metadata::MetadataBaseNode>() != nullptr) {
+      auto metadata = Downcast<runtime::metadata::MetadataBase>(*value);
+      const runtime::metadata::MetadataArrayNode* arr = value->as<runtime::metadata::MetadataArrayNode>();
+      std::cout << "Is array? " << arr << std::endl;
+      if (arr != nullptr) {
+        for (unsigned int i = 0; i < arr->array.size(); i++) {
+          ObjectRef o = arr->array[i];
+          std::cout << "queue-visiting array element " << i << ": " << o->type_index() << " (" << o.operator->() << ")" << std::endl;
+          if (o.as<runtime::metadata::MetadataBaseNode>() != nullptr) {
+            std::stringstream ss;
+            ss << i;
+            address_parts_.push_back(ss.str());
+            runtime::metadata::MetadataBase metadata = Downcast<runtime::metadata::MetadataBase>(o);
+            ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
+            address_parts_.pop_back();
+          }
+        }
+      } else {
+        ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
+      }
+
+      queue_->push_back(std::make_tuple(address_from_parts(address_parts_), Downcast<runtime::metadata::MetadataBase>(*value)));
+    }
+    address_parts_.pop_back();
+  }
+
+ private:
+  std::vector<QueueItem>* queue_;
+  std::vector<std::string> address_parts_;
+};
+
 class MetadataSerializer : public AttrVisitor {
 public:
   static constexpr const char* kGlobalSymbol = "kTvmgenMetadata";
@@ -492,42 +551,56 @@ public:
     }
   }
 
+  void WriteKey(const char* key) {
+    if (key != nullptr) {
+      code_ << " /* " << key << "*/";
+    }
+  }
+
   void Visit(const char* key, double* value) final {
     WriteComma();
     code_.setf(std::ios::hex | std::ios::showbase | std::ios::fixed | std::ios::scientific,
               std::ios::basefield | std::ios::showbase | std::ios::floatfield);
-    code_ << *value << " /* " << key << " */";
+    code_ << *value;
+    WriteKey(key);
   }
 
   void Visit(const char* key, int64_t* value) final {
     WriteComma();
-    code_ << *value << "L /* " << key << " */";
+    code_ << *value << "L";
+    WriteKey(key);
   }
 
   void Visit(const char* key, uint64_t* value) final {
     WriteComma();
-    code_ << *value << "UL /* " << key << " */";
+    code_ << *value << "UL";
+    WriteKey(key);
   }
   void Visit(const char* key, int* value) final {
     WriteComma();
-    code_ << *value << " /* " << key << " */";
+    code_ << *value;
+    WriteKey(key);
   }
   void Visit(const char* key, bool* value) final {
     WriteComma();
-    code_ << *value << " /* " << key << " */";
+    code_ << *value;
+    WriteKey(key);
   }
   void Visit(const char* key, std::string* value) final {
     WriteComma();
-    code_ << "\"" << *value << "\" /* " << key << " */";
+    code_ << "\"" << *value << "\"";
+    WriteKey(key);
   }
   void Visit(const char* key, void** value) final {
     WriteComma();
-    code_ << *value << " /* " << key << " */";
+    code_ << *value;
+    WriteKey(key);
   }
   void Visit(const char* key, DataType* value) final {
     WriteComma();
     code_ << "DLDataType{" << value->code() << ", " << value->bits() << ", "
-          << value->lanes() << "} /* " << key << " */";
+          << value->lanes() << "}";
+    WriteKey(key);
   }
 
   void Visit(const char* key, runtime::NDArray* value) final {
@@ -536,39 +609,49 @@ public:
   }
 
   void VisitArray(const runtime::metadata::MetadataArrayNode* array) {
-    std::cout << "visit array " << array << " " << array->array->size() << std::endl;
-    WriteComma();
-    code_ << "{";
-    for (unsigned int i = 0; i < array->array->size(); ++i) { //ObjectRef o : *(array->array)) {
-      if (i > 0) {
-        code_ << ", ";
-      }
-
-      ObjectRef o = array->array->at(i);
+    std::cout << "visit array " << array << ": " << array->c_type << " " << array->array.size() << std::endl;
+    auto old_is_first_item = is_first_item_;
+    is_first_item_ = true;
+    for (unsigned int i = 0; i < array->array.size(); ++i) { //ObjectRef o : *(array->array)) {
+      ObjectRef o = array->array[i];
+      std::cout << "visiting array element " << i << ": " << o->type_index() << " (" << o.operator->() << ")" << std::endl;
       if (o->IsInstance<IntImmNode>()) {
         int64_t i = Downcast<Integer>(o);
-        Visit("", &i);
+        Visit(nullptr, &i);
         continue;
       }
 
       if (o->IsInstance<StringObj>()) {
         std::string s = Downcast<String>(o);
-        Visit("", &s);
+        Visit(nullptr, &s);
         continue;
       }
 
       runtime::metadata::MetadataBase metadata = Downcast<runtime::metadata::MetadataBase>(o);
-      std::cout << "visit member " << metadata->get_name();
-      ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
+      std::cout << "visit member " << metadata->get_name() << std::endl;
+      std::stringstream i_str;
+      i_str << i;
+      address_.push_back(i_str.str());
+      Visit(nullptr, &metadata);
+      address_.pop_back();
+//      ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
     }
-    code_ << "}";
+    is_first_item_ = old_is_first_item;
   }
 
   void Visit(const char* key, ObjectRef* value) final {
     const runtime::metadata::MetadataArrayNode* arr = value->as<runtime::metadata::MetadataArrayNode>();
     std::cout << "Is array? " << arr << std::endl;
     if (arr != nullptr) {
-      VisitArray(Downcast<runtime::metadata::MetadataArray>(*value).operator->());
+      WriteComma();
+      if (key != nullptr) {
+        address_.push_back(key);
+      }
+      code_ << address_from_parts(address_) << " , " << arr->array.size() << " /* " << key << "_size */";
+      if (key != nullptr) {
+        address_.pop_back();
+      }
+//      VisitArray(key, Downcast<runtime::metadata::MetadataArray>(*value).operator->());
       // WriteComma();
       // code_ << "{";
       // if (arr->size() > 0) {
@@ -587,12 +670,13 @@ public:
     runtime::metadata::MetadataBase metadata = Downcast<runtime::metadata::MetadataBase>(*value);
     std::cout << "downcast ok: " << metadata->get_name() << std::endl;
 
-    code_ << "{";
-    auto old_is_first_item = is_first_item_;
-    is_first_item_ = true;
+    if (key != nullptr) {  // NOTE: outermost call passes nullptr key
+      address_.push_back(key);
+    }
     ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
-    is_first_item_ = old_is_first_item;
-    code_ << "}";
+    if (key != nullptr) {  // NOTE: outermost call passes nullptr key
+      address_.pop_back();
+    }
   }
 
   // void EnterStruct(::tvm::runtime::metadata::MetadataBase metadata) {
@@ -613,10 +697,30 @@ public:
   void CodegenMetadata(::tvm::runtime::metadata::Metadata metadata) {
     decl_
       << "#include <inttypes.h>" << std::endl
+      << "#include <tvm/runtime/metadata.h>" << std::endl
       << "#include <tvm/runtime/c_runtime_api.h>" << std::endl;
-    code_ << "const struct TVMMetadata " << kGlobalSymbol << " = {";
-    ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
-    code_ << "};" << std::endl;
+    std::vector<MetadataQueuer::QueueItem> queue;
+    MetadataQueuer queuer{&queue};
+    queuer.Visit(kGlobalSymbol, &metadata);
+
+    for (MetadataQueuer::QueueItem item : queue) {
+      auto struct_name = std::get<0>(item);
+      auto obj = std::get<1>(item);
+      auto arr = obj.as<runtime::metadata::MetadataArrayNode>();
+      std::cout << "codegen: " << struct_name;
+      is_first_item_ = true;
+      address_.push_back(struct_name);
+      if (arr != nullptr) {
+        code_ << "const " << arr->c_type << " " << struct_name
+              << "[" << arr->array.size() << "] = {" << std::endl;
+        VisitArray(arr);
+      } else {
+        code_ << "const struct TVMMetadata " << struct_name << " = {" << std::endl;
+        Visit(nullptr, &obj);
+      }
+      address_.pop_back();
+      code_ << "};" << std::endl;
+    }
   }
 
   std::string GetOutput() {
@@ -624,6 +728,7 @@ public:
   }
 
 private:
+  std::vector<std::string> address_;
   std::stringstream decl_;
   std::stringstream code_;
   bool is_first_item_;
@@ -655,10 +760,10 @@ runtime::Module CreateCSourceCppMetadataModule(runtime::metadata::Metadata metad
 //  MetadataStructDefiner definer;
 //  ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), &definer);
   MetadataSerializer serializer;
-  ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), &serializer);
+  serializer.CodegenMetadata(metadata);
   std::stringstream lookup_func;
   lookup_func << "TVM_DLL int32_t get_c_metadata(TVMValue* arg_values, int* arg_tcodes, int num_args, TVMValue* ret_values, int* ret_tcodes, void* resource_handle) {" << std::endl;
-  lookup_func << "    ret_values[0].v_handle = &" << MetadataSerializer::kGlobalSymbol << ";" << std::endl;
+  lookup_func << "    ret_values[0].v_handle = (void*) &" << MetadataSerializer::kGlobalSymbol << ";" << std::endl;
   lookup_func << "    ret_tcodes[0] = kTVMOpaqueHandle;" << std::endl;
   lookup_func << "};" << std::endl;
 

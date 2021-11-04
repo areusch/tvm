@@ -369,9 +369,59 @@ def generate_class(obj, header, impl):
     impl.write(f"TVM_REGISTER_OBJECT_TYPE({obj.__name__}Node);")
 
 
+def generate_visitable_class(obj : MetadataBase, header : Writer, impl : Writer):
+    cls_def = (
+        f"\nclass Visitable{obj.__name__}Node : public ::tvm::runtime::metadata::{obj.__name__}Node {{")
+    with header.scope(cls_def, "};") as cls:
+        cls.write(f"public:", adjust=-1)
+        cls.write(f"explicit Visitable{obj.__name__}Node(const struct ::TVM{obj.__name__}* data) : {obj.__name__}Node{{data}} {{}}")
+
+        # This is so bad. required by src/node/serialization.cc.
+        cls.write(f"explicit Visitable{obj.__name__}Node() : {obj.__name__}Node{{nullptr}} {{}}")
+        metadata_fields = MetadataFields.from_metadata(obj)
+        with cls.scope("\nvoid VisitAttrs(AttrVisitor* v) {", "}") as visit:
+            for i, field in enumerate(metadata_fields):
+                # elif field.type.python_type is DataType:
+                #     visit.write(f"::tvm::runtime::DataType {field.name}_dtype{{{field.name}}};")
+                #     visit.write(f'v->Visit("{field.name}", &{field.name}_dtype);')
+                if field.type.is_array:
+                    visit.write(textwrap.dedent(f"""\
+                        auto {field.name}_array = Array<ObjectRef>();
+                        auto {field.name}_accessor = {field.name}();
+                        {field.name}_array.reserve(num_{field.name}());"""))
+                    with visit.scope(f"for (int64_t i = 0; i < num_{field.name}(); ++i) {{", "}") as for_scope:
+                        element_type = field.type.element_type
+                        if element_type.is_primitive or element_type.python_type is str:
+                            visit.write(f"{field.name}_array.push_back({field.type.element_type.prim_expr_ref_type}{{{field.name}_accessor[i]}});")
+                        elif element_type.is_array:
+                            raise TypeError("list of list not supported")
+                        elif element_type.is_object:
+                            visit.write(f"{field.name}_array.push_back({field.type.element_type.prim_expr_ref_type}{{{field.name}_accessor[i]}});")
+                        else:
+                            raise TypeError(f"no such type: {element_type}")
+                    visit.write(f'::tvm::runtime::metadata::MetadataArray {field.name}_metadata_array{{{field.name}_array, "{field.type.element_type.c_type}"}};')
+                    visit.write(f'v->Visit("{field.name}", &{field.name}_metadata_array);')
+#                if field.type.is_primitive:
+                elif field.type.python_type is str:
+                    visit.write(f'::std::string {field.name}_cpp{{data()->{field.name}}};')
+                    visit.write(f'v->Visit("{field.name}", &{field.name}_cpp);')
+                else:
+                    visit.write(f'{field.type.cpp_type} {field.name}_cpp{{{field.name}()}};')
+                    visit.write(f'v->Visit("{field.name}", &{field.name}_cpp);')
+                # elif field.type.is_object:
+                #     visit.write(f'v->Visit("{field.name}", &{field.name}_);')
+                # else:
+                #     raise TypeError(f"Don't know how to codegen field {field.name} with type {field.type.python_type}")
+
+    impl.write(f"TVM_REGISTER_REFLECTION_VTABLE(Visitable{obj.__name__}Node, ::tvm::detail::ReflectionTrait<Visitable{obj.__name__}Node>) \
+      .set_creator([](const std::string&) -> ObjectPtr<Object> {{                     \
+        return ::tvm::runtime::make_object<Visitable{obj.__name__}Node>();                              \
+      }});")
+
+
 def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer):
     cls_def = (
-        f"\nclass InMemory{obj.__name__}Node : public ::tvm::runtime::metadata::{obj.__name__}Node {{")
+        f"\nclass InMemory{obj.__name__}Node : public ::tvm::runtime::metadata::Visitable{obj.__name__}Node {{")
     with header.scope(cls_def, "};") as cls:
         cls.write(f"public:", adjust=-1)
         cls.write(f"InMemory{obj.__name__}Node() : InMemory{obj.__name__}Node(")
@@ -407,7 +457,7 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
                     storage_init.write(f"{field.name}_.c_str(){', ' if i < len(metadata_fields) - 1 else ''}")
                 else:
                     assert False
-        with cls.scope(f"    {obj.__name__}Node{{&storage_}} {{", "}") as init_scope:
+        with cls.scope(f"    Visitable{obj.__name__}Node{{&storage_}} {{", "}") as init_scope:
             for i, field in enumerate(metadata_fields):
                 if field.type.is_object:
                     storage_init.write(f"{field.name}_.get(){', ' if i < len(metadata_fields) - 1 else ''}")
@@ -427,38 +477,6 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
                         else:
                             raise TypeError(f"field {field.name}: don't know how to handle type {field.type.python_type}")
 
-        with cls.scope("\nvoid VisitAttrs(AttrVisitor* v) {", "}") as visit:
-            for i, field in enumerate(metadata_fields):
-                if field.type.python_type in (int, float):
-                    visit.write(f'v->Visit("{field.name}", &storage_.{field.name});')
-                elif field.type.python_type is DataType:
-                    visit.write(f"::tvm::runtime::DataType {field.name}_dtype{{storage_.{field.name}}};")
-                    visit.write(f'v->Visit("{field.name}", &{field.name}_dtype);')
-                    visit.write(f"storage_.{field.name} = {field.name}_dtype;")
-                elif field.type.is_array:
-                    visit.write(textwrap.dedent(f"""\
-                        auto {field.name}_array = Array<{field.type.element_type.prim_expr_ref_type}>();
-                        auto {field.name}_accessor = {field.name}();
-                        {field.name}_array.reserve(num_{field.name}());"""))
-                    with visit.scope(f"for (int64_t i = 0; i < num_{field.name}(); ++i) {{", "}") as for_scope:
-                        element_type = field.type.element_type
-                        if element_type.is_primitive or element_type.python_type is str:
-                            visit.write(f"{field.name}_array.push_back({field.type.element_type.prim_expr_ref_type}{{{field.name}_accessor[i]}});")
-                        elif element_type.is_array:
-                            raise TypeError("list of list not supported")
-                        elif element_type.is_object:
-                            visit.write(f"{field.name}_array.push_back({field.type.element_type.prim_expr_ref_type}{{{field.name}_accessor[i]}});")
-                        else:
-                            raise TypeError(f"no such type: {element_type}")
-                    visit.write(f'::tvm::runtime::metadata::MetadataArray {field.name}_metadata_array{{{field.name}_array.GetArrayNode(), "{field.type.c_type}"}};')
-                    visit.write(f'v->Visit("{field.name}", &{field.name}_metadata_array);')
-                elif field.type.is_object:
-                    visit.write(f'v->Visit("{field.name}", &{field.name}_);')
-                elif field.type.python_type is str:
-                    visit.write(f'v->Visit("{field.name}", &{field.name}_);')
-                else:
-                    raise TypeError(f"Don't know how to codegen field {field.name} with type {field.type.python_type}")
-
         cls.write("\nprivate:", adjust=-1)
 
         # define non-primitive storage.
@@ -470,11 +488,6 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
 
         # note: must come last due to C++ initialization order
         cls.write(f"struct ::TVM{obj.__name__} storage_;")
-
-    impl.write(f"TVM_REGISTER_REFLECTION_VTABLE(InMemory{obj.__name__}Node, ::tvm::detail::ReflectionTrait<InMemory{obj.__name__}Node>) \
-      .set_creator([](const std::string&) -> ObjectPtr<Object> {{                     \
-        return ::tvm::runtime::make_object<InMemory{obj.__name__}Node>();                              \
-      }});")
 
 
 
@@ -588,6 +601,7 @@ def main(argv):
             namespace_scope(cc_impl, ["tvm", "runtime", "metadata"]))
 
         for obj in traversal_order:
+            generate_visitable_class(obj, header_ns_scope, impl_ns_scope)
             generate_in_memory_class(obj, header_ns_scope, impl_ns_scope)
 
 
