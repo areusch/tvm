@@ -165,7 +165,7 @@ class MetadataType:
         elif self.python_type is DataType:
             return "::tvm::runtime::DataType"
         elif self.is_array:
-            return f"::tvm::support::Span<{self.element_type.cpp_type}, {self.element_type.cpp_type}>"
+            return f"::tvm::support::Span<const {self.element_type.cpp_type}, const {self.element_type.cpp_type}>"
         elif self.is_object:
             if self.is_element_type:
                 return self.python_type.__name__
@@ -314,7 +314,7 @@ class Writer:
 def generate_struct(obj, writer):
     with writer.scope(f"\nstruct TVM{obj.__name__} {{", "};"):
         for field in MetadataFields.from_metadata(obj):
-            writer.write(f"{field.type.c_type} {field.name};")
+            writer.write(f"{'const ' if field.type.is_array else ''}{field.type.c_type} {field.name};")
 
             if field.type.is_array:
                 writer.write(f"int64_t num_{field.name};")
@@ -338,12 +338,12 @@ def generate_class(obj, header, impl):
                     element_ctype = field.type.element_type.c_type
                     if field.type.element_type.python_type is str:
                         element_ctype = element_type.rstrip("*")  # String is special-cased list-of-lists
-                    cls.write(f"ArrayAccessor<{element_ctype}*, {element_type.cpp_type}> {field.name}();")
-                    with impl.scope(f"ArrayAccessor<{element_ctype}*, {element_type.cpp_type}> {obj.__name__}Node::{field.name}() {{", "}") as func:
+                    cls.write(f"ArrayAccessor<const {element_ctype}*, {element_type.cpp_type}> {field.name}();")
+                    with impl.scope(f"ArrayAccessor<const {element_ctype}*, {element_type.cpp_type}> {obj.__name__}Node::{field.name}() {{", "}") as func:
                         func.write(
                             f"if ({field.name}_refs_.get() == nullptr) {{ {field.name}_refs_.reset(new ::std::vector<{element_type.cpp_type}>()); }}")
                         func.write(
-                            f"return ArrayAccessor<{element_ctype}*, {element_type.cpp_type}>(&data_->{field.name}, data_->num_{field.name}, {field.name}_refs_);")
+                            f"return ArrayAccessor<const {element_ctype}*, {element_type.cpp_type}>(&data_->{field.name}, data_->num_{field.name}, {field.name}_refs_);")
             else:
                 cls.write(f"inline {field.type.cpp_type} {field.name}() const {{ return {field.type.cpp_type}(data_->{field.name}); }}")
 
@@ -442,6 +442,8 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
 
             if field.type.is_array:
                 cls.write(f"{field.name}_{{new {field.type.element_type.c_type}[{field.name}.size()]()}},", adjust=4)
+                if field.type.element_type.is_object:
+                    cls.write(f"{field.name}_objs_{{{field.name}}},", adjust=4)
             else:
                 cls.write(f"{field.name}_{{{field.name}}},", adjust=4)
 
@@ -485,6 +487,9 @@ def generate_in_memory_class(obj : MetadataBase, header : Writer, impl : Writer)
                 continue
 
             cls.write(f"{field.type.in_memory_storage_type} {field.name}_;")
+
+            if field.type.is_array and field.type.element_type.is_object:
+                cls.write(f"std::vector<{field.type.element_type.cpp_builder_type}> {field.name}_objs_;")
 
         # note: must come last due to C++ initialization order
         cls.write(f"struct ::TVM{obj.__name__} storage_;")

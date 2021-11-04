@@ -762,9 +762,14 @@ runtime::Module CreateCSourceCppMetadataModule(runtime::metadata::Metadata metad
   MetadataSerializer serializer;
   serializer.CodegenMetadata(metadata);
   std::stringstream lookup_func;
+  lookup_func << "#ifdef __cplusplus\n"
+              << "extern \"C\"\n"
+              << "#endif\n";
+
   lookup_func << "TVM_DLL int32_t get_c_metadata(TVMValue* arg_values, int* arg_tcodes, int num_args, TVMValue* ret_values, int* ret_tcodes, void* resource_handle) {" << std::endl;
   lookup_func << "    ret_values[0].v_handle = (void*) &" << MetadataSerializer::kGlobalSymbol << ";" << std::endl;
   lookup_func << "    ret_tcodes[0] = kTVMOpaqueHandle;" << std::endl;
+  lookup_func << "    return 0;" << std::endl;
   lookup_func << "};" << std::endl;
 
   auto mod = MetadataModuleCreate(metadata);
