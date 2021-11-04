@@ -142,19 +142,20 @@ enum MetadataTypeIndex : uint8_t {
 class MetadataArrayNode : public MetadataBaseNode {
  public:
 //  MetadataArray(Array<ObjectRef> array, MetadataTypeIndex type_index) : array{array}, type_index{type_index} {}
-  MetadataArrayNode(ArrayNode* array, const char* c_type) : array{array}, c_type{c_type} {}
+  MetadataArrayNode(Array<ObjectRef> array, const char* c_type) : array(std::move(array)), c_type{c_type} {}
 
   std::string get_name() override;
 
-  ArrayNode* array;
+  Array<ObjectRef> array;
   const char* c_type;
+  static constexpr const char* _type_key = "metadata.MetadataArrayNode";
   TVM_DECLARE_BASE_OBJECT_INFO(MetadataArrayNode, MetadataBaseNode);
 };
 
 class MetadataArray : public MetadataBase {
  public:
 //  MetadataArray(Array<ObjectRef> array, MetadataTypeIndex type_index);
-  MetadataArray(ArrayNode* array, const char* c_type);
+  MetadataArray(Array<ObjectRef> array, const char* c_type);
   TVM_DEFINE_MUTABLE_OBJECT_REF_METHODS(MetadataArray, MetadataBase, MetadataArrayNode);
 };
 

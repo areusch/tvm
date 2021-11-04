@@ -32,11 +32,12 @@ namespace tvm {
 namespace runtime {
 namespace metadata {
 
-MetadataArray::MetadataArray(ArrayNode* array, const char* c_type) : MetadataBase{make_object<MetadataArrayNode>(array, c_type)} {}
+MetadataArray::MetadataArray(Array<ObjectRef> array, const char* c_type) : MetadataBase{make_object<MetadataArrayNode>(array, c_type)} {}
 
 std::string MetadataArrayNode::get_name() { return "MetadataArray"; }
 
 TVM_REGISTER_OBJECT_TYPE(MetadataBaseNode);
+TVM_REGISTER_OBJECT_TYPE(MetadataArrayNode);
 
 }  // namespace metadata
 
