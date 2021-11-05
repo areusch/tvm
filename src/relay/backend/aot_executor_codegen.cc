@@ -297,6 +297,51 @@ class AOTExecutorCodegen : public MixedModeVisitor {
     }
   }
 
+  PrimExpr MakeDLTensor(Expr relay_arg, TensorType ttype, PrimExpr data) {
+    for (Var v : input_vars_) {
+      std::cout << "COMPARE " << relay_arg << " vs " << v << std::endl;
+      if (v == relay_arg) {
+        std::cout << "OK" << std::endl;
+        return data;
+      }
+    }
+    std::cout << "NONE" << std::endl;
+    for (int return_sid : return_sid_) {
+      auto return_expr = sids_table_[return_sid];
+      std::cout << "RET_COMPARE " << return_expr << " vs " << relay_arg << std::endl;
+      if (return_expr == relay_arg) {
+        std::cout << "RETURN SID!" << std::endl;
+        return data;
+      }
+    }
+    std::cout << "NONE" << std::endl;
+    return tvm::tir::Call(
+      DataType::Handle(),
+      tvm::tir::builtin::tvm_stack_make_array(),
+      Array<PrimExpr>({data, tvm::tir::Call(DataType::Handle(),
+                                tvm::tir::builtin::tvm_stack_make_shape(),
+                                {ttype->shape}),
+           tvm::Integer(0),
+           tvm::Integer(ttype->shape.size()),
+                       tvm::tir::make_const(ttype->dtype, 0),
+           tvm::Integer(0)}));
+  }
+
+  void PushTuple(Tuple tuple, std::vector<tir::Var> sids, Array<PrimExpr> args) {
+    CHECK_EQ(sids.size(), tuple->fields.size())
+      << "Relay tuple does not map 1:1 into TIR; AOT can't handle this type of Relay Expr in a CallNode.";
+    StorageInfo& sinfo = storage_device_map_[tuple];
+    for (unsigned int i = 0; i < sids.size(); ++i) {
+      std::cout << "LOOKUP tuple return " << sinfo->storage_ids[i] << " vs " << return_sid_[0] << std::endl;
+      if (std::find(return_sid_.begin(), return_sid_.end(), sinfo->storage_ids[i]) != return_sid_.end()) {
+        std::cout << "FOUND RETURN" << std::endl;
+        args.push_back(sids[i]);
+      } else {
+        args.push_back(MakeDLTensor(tuple->fields[i], Downcast<TensorType>(tuple->fields[i]->checked_type()), sids[i]));
+      }
+    }
+  }
+
   /*!
    * brief Call a function with a given name
    */
@@ -305,22 +350,44 @@ class AOTExecutorCodegen : public MixedModeVisitor {
     std::vector<tir::Stmt> create_func_call_stmts;
     // Pack the inputs
     for (Expr arg : call->args) {
+      std::vector<PrimExpr> arg_handle;
       if (params_by_expr_.find(arg) != params_by_expr_.end()) {
-        auto param_handle = tvm::tir::Call(DataType::Handle(), tvm::tir::builtin::lookup_param(),
-                                           {tir::StringImm(params_by_expr_[arg])});
-        args.push_back(param_handle);
+        args.push_back(MakeDLTensor(arg, Downcast<TensorType>(arg->checked_type()),
+                                    tvm::tir::Call(DataType::Handle(), tvm::tir::builtin::lookup_param(),
+                                                   {tir::StringImm(params_by_expr_[arg])})));
       } else {
-        auto var_arg = FindExpr(arg);
-        for (const auto& var : var_arg) {
-          args.push_back(var);
+        auto sids = FindExpr(arg);
+        if (sids.size() > 1) {
+          auto tuple = Downcast<Tuple>(arg);
+          PushTuple(tuple, sids, args);
+        } else {
+          StorageInfo& sinfo = storage_device_map_[arg];
+          std::cout << "LOOKUP return " << sinfo->storage_ids[0] << " vs " << return_sid_[0] << std::endl;
+          if (std::find(return_sid_.begin(), return_sid_.end(), sinfo->storage_ids[0]) != return_sid_.end()) {
+            std::cout << "FOUND RETURN" << std::endl;
+            args.push_back(sids[0]);
+          } else {
+            args.push_back(MakeDLTensor(arg, Downcast<TensorType>(arg->checked_type()), sids[0]));
+          }
         }
       }
     }
 
     auto ret_expr = Downcast<Expr>(call);
     // Pack the return(s) value. A call node can produce multiple outputs
-    for (const auto& var : PackSid(ret_expr)) {
-      args.push_back(var);
+    auto ret_expr_sid = PackSid(ret_expr);
+    if (ret_expr_sid.size() > 1) {
+      auto tuple = Downcast<Tuple>(ret_expr);
+      PushTuple(tuple, ret_expr_sid, args);
+    } else {
+      StorageInfo& sinfo = storage_device_map_[ret_expr];
+      std::cout << "LOOKUP return " << sinfo->storage_ids[0] << " vs " << return_sid_[0] << std::endl;
+      if (std::find(return_sid_.begin(), return_sid_.end(), sinfo->storage_ids[0]) != return_sid_.end()) {
+        std::cout << "FOUND RETURN" << std::endl;
+        args.push_back(ret_expr_sid[0]);
+      } else {
+        args.push_back(MakeDLTensor(ret_expr, Downcast<TensorType>(ret_expr->checked_type()), ret_expr_sid[0]));
+      }
     }
 
     // Use tvm_call_packed to execute the function unless we're calling directly
