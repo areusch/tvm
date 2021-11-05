@@ -460,7 +460,7 @@ class Module(object):
             if "options" in kwargs:
                 opts = kwargs["options"]
                 options = opts if isinstance(opts, (list, tuple)) else [opts]
-            opts = options + ["-I" + path for path in find_include_path()] + ["-Ibuild/generated/include"]
+            opts = options + ["-I" + path for path in find_include_path()] + ["-Ibuild/generated/include", "-g", "-Og"]
             kwargs.update({"options": opts})
 
         return fcompile(file_name, files, **kwargs)
