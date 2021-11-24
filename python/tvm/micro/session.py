@@ -269,6 +269,10 @@ def compile_and_create_micro_session(
     project_options: dict
         Options for the microTVM API Server contained in template_project_dir.
     """
+    import logging
+    import sys
+    logging.getLogger("tvm.micro.transport").setLevel(logging.DEBUG)
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stderr))
 
     temp_dir = utils.tempdir()
     # Keep temp directory for generate project
