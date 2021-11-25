@@ -360,8 +360,12 @@ class AOTExecutorCodegen : public MixedModeVisitor {
           GenerateDeviceHook(context, "Close"),
       }));
     } else {
+      tir::Evaluate pre_call(tir::Call(DataType::Int(32), tvm::tir::builtin::call_extern(),
+                                       {tvm::tir::StringImm("tvm_function_start"), args[0]}));
       tir::Evaluate func_call(tvm::tir::Call(DataType::Int(32), calling_pattern, args));
-      create_func_call_stmts.push_back(func_call);
+      tir::Evaluate post_call(tir::Call(DataType::Int(32), tvm::tir::builtin::call_extern(),
+                                        {tvm::tir::StringImm("tvm_function_end"), args[0]}));
+      create_func_call_stmts.push_back(tir::SeqStmt({pre_call, func_call, post_call}));
     }
 
     tir::Stmt body = tir::SeqStmt(create_func_call_stmts);
