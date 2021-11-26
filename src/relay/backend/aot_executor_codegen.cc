@@ -315,7 +315,7 @@ class AOTExecutorCodegen : public MixedModeVisitor {
       }
     }
     std::cout << "NONE" << std::endl;
-    return tvm::tir::Call(
+    return data; /*tvm::tir::Call(
       DataType::Handle(),
       tvm::tir::builtin::tvm_stack_make_array(),
       Array<PrimExpr>({data, tvm::tir::Call(DataType::Handle(),
@@ -323,8 +323,8 @@ class AOTExecutorCodegen : public MixedModeVisitor {
                                 {ttype->shape}),
            tvm::Integer(0),
            tvm::Integer(ttype->shape.size()),
-                       tvm::tir::make_const(ttype->dtype, 0),
-           tvm::Integer(0)}));
+           tvm::tir::make_const(ttype->dtype, 0),
+           tvm::Integer(0)})); */
   }
 
   void PushTuple(Tuple tuple, std::vector<tir::Var> sids, Array<PrimExpr> args) {
@@ -395,14 +395,15 @@ class AOTExecutorCodegen : public MixedModeVisitor {
     if (use_unpacked_api_) {
       calling_pattern = tvm::tir::builtin::call_extern();
     } else {
-      calling_pattern =
-        target_host_->GetAttr<String>("runtime").value_or(kTvmRuntimeCpp) == kTvmRuntimeCrt ?
-        tvm::tir::builtin::tvm_call_cpacked() :
-        tvm::tir::builtin::tvm_call_packed();
+      calling_pattern =        tvm::tir::builtin::tvm_call_cpacked() ;
+//        target_host_->GetAttr<String>("runtime").value_or(kTvmRuntimeCpp) == kTvmRuntimeCrt ?
+//        tvm::tir::builtin::tvm_call_cpacked() :
+//        tvm::tir::builtin::tvm_call_packed();
     }
 
     create_func_call_stmts.push_back(
         tir::Evaluate(tvm::tir::Call(DataType::Int(32), calling_pattern, args)));
+    LOG(INFO) << "Created call: " << create_func_call_stmts.back();
 
     tir::Stmt body = tir::SeqStmt(create_func_call_stmts);
     stmts_.push_back(body);
