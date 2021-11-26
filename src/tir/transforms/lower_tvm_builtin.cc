@@ -84,8 +84,10 @@ class BuiltinLower : public StmtExprMutator {
 
     auto stmt = StmtExprMutator::VisitStmt(s);
     auto& scope = alloca_scope_.back();
-    ICHECK_EQ(scope.run_shape_stack, -1);
-    ICHECK_EQ(scope.run_array_stack, 0);
+//    ICHECK_EQ(scope.run_shape_stack, -1);
+//    ICHECK_EQ(scope.run_array_stack, 0);
+    LOG(INFO) << "VisitStmt: expect run_shape_stack == -1, got " << scope.run_shape_stack;
+    LOG(INFO) << "VisitStmt: expect run_array_stack == 0, got " << scope.run_array_stack;
 
     auto prep_seq = std::move(prep_seq_stack_.back());
     prep_seq_stack_.pop_back();
@@ -192,6 +194,7 @@ class BuiltinLower : public StmtExprMutator {
     }
   }
   PrimExpr VisitExpr_(const CallNode* op) final {
+    LOG(INFO) << "--> Visit call " << op->op;
     if (op->op.same_as(builtin::tvm_call_packed())) {
       return MakeCallPacked(op, /* use_string_lookup */ true);
     } else if (op->op.same_as(builtin::tvm_call_cpacked())) {
@@ -219,6 +222,7 @@ class BuiltinLower : public StmtExprMutator {
     }
     int64_t stack_begin = scope.run_shape_stack;
     scope.run_shape_stack += op->args.size();
+    LOG(INFO) << "MakeShape: run shape stack += " << op->args.size() << " from " << stack_begin;
     PrimExpr expr = StmtExprMutator::VisitExpr_(op);
     op = expr.as<CallNode>();
     // no need to perform any store for a scalar shape
@@ -236,6 +240,7 @@ class BuiltinLower : public StmtExprMutator {
 
     size_t idx = scope.run_array_stack;
     scope.run_array_stack += 1;
+    LOG(INFO) << "MakeShape: run array stack += " << 1 << " from " << idx;
     PrimExpr expr = StmtExprMutator::VisitExpr_(op);
     op = expr.as<CallNode>();
 
@@ -279,6 +284,7 @@ class BuiltinLower : public StmtExprMutator {
     int64_t restore_shape_stack = scope.run_shape_stack;
     size_t restore_array_stack = scope.run_array_stack;
     size_t arg_stack_begin = scope.run_arg_stack;
+    LOG(INFO) << "MakeCallPacked: restores: " << restore_shape_stack << "; " << restore_array_stack << "; " << arg_stack_begin;
 
     size_t arg_count = op->args.size();
 
@@ -436,7 +442,9 @@ namespace transform {
 Pass LowerTVMBuiltin() {
   auto pass_func = [](PrimFunc f, IRModule m, PassContext ctx) {
     auto* n = f.CopyOnWrite();
+    LOG(INFO) << "--> Lower: " << f;
     n->body = BuiltinLower().Build(n->body);
+    LOG(INFO) << "<-- Lowered: " << f;
     return f;
   };
   return CreatePrimFuncPass(pass_func, 0, "tir.LowerTVMBuiltin", {});
