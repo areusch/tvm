@@ -962,8 +962,13 @@ class AOTExecutorCodegen : public MixedModeVisitor {
           make_object<runtime::metadata::InMemoryTensorInfoNode>(
             name.str(), ShapeToJSON(ttype->shape), ttype->dtype)));
     }
+    auto devices = ListDevices();
+    std::vector<std::string> devices_vector;
+    for (auto d : devices) {
+      devices_vector.push_back(d.operator std::string());
+    }
     auto n = make_object<runtime::metadata::InMemoryMetadataNode>(
-        kMetadataVersion, inputs, outputs, ListDevices(), runtime::kTvmExecutorAot, mod_name, interface_api, use_unpacked_api_);
+      kMetadataVersion, inputs, outputs, devices_vector, runtime::kTvmExecutorAot, mod_name, interface_api, use_unpacked_api_);
     ret.metadata = runtime::metadata::Metadata(std::move(n));
     return ret;
   }

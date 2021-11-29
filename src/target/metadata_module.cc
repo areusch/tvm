@@ -37,6 +37,7 @@ namespace codegen {
 
 
 static runtime::Module CreateCrtMetadataModule(runtime::Module target_module, Target target,
+                                               relay::Runtime runtime,
                                                runtime::metadata::Metadata metadata,
                                                Array<runtime::Module> non_crt_exportable_modules,
                                                Array<runtime::Module> crt_exportable_modules,
@@ -63,11 +64,11 @@ static runtime::Module CreateCrtMetadataModule(runtime::Module target_module, Ta
 
   if (target->kind->name == "c") {
     crt_exportable_modules.push_back(target_module);
-    target_module = CreateCSourceCrtMetadataModule(crt_exportable_modules, target, metadata);
+    target_module = CreateCSourceCrtMetadataModule(crt_exportable_modules, target, runtime, metadata);
   } else if (target->kind->name == "llvm") {
 #ifdef TVM_LLVM_VERSION
     crt_exportable_modules.push_back(target_module);
-    target_module = CreateLLVMCrtMetadataModule(crt_exportable_modules, target);
+    target_module = CreateLLVMCrtMetadataModule(crt_exportable_modules, target, runtime);
 #else   // TVM_LLVM_VERSION
     LOG(FATAL) << "TVM was not built with LLVM enabled.";
 #endif  // TVM_LLVM_VERSION
@@ -119,7 +120,7 @@ static runtime::Module CreateCppMetadataModule(runtime::Module target_module, Ta
 runtime::Module CreateMetadataModule(
     const std::unordered_map<std::string, runtime::NDArray>& params,
     tvm::runtime::Module target_module, const Array<runtime::Module>& ext_modules, Target target,
-    tvm::relay::Runtime runtime, runtime::Metadata metadata) {
+    tvm::relay::Runtime runtime, runtime::metadata::Metadata metadata) {
   // Here we split modules into two groups:
   //  1. Those modules which can be exported to C-runtime. These are DSO-exportable
   //     (i.e. llvm or c) modules which return nothing from get_const_vars().
@@ -165,7 +166,7 @@ runtime::Module CreateMetadataModule(
   }
 
   if (is_targeting_crt) {
-    return CreateCrtMetadataModule(target_module, target, metadata, non_crt_exportable_modules, crt_exportable_modules, params);
+    return CreateCrtMetadataModule(target_module, target, runtime, metadata, non_crt_exportable_modules, crt_exportable_modules, params);
   } else {
     return CreateCppMetadataModule(target_module, target, metadata, sym_metadata, non_crt_exportable_modules, crt_exportable_modules, params);
   }

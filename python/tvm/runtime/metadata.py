@@ -118,6 +118,7 @@ class MetadataType:
     """Collects utility functions for reasoning about field types."""
 
     C_TYPE_BY_PYTHON_TYPE = {
+        bool: "bool",
         int: "int64_t",
         float: "double",
         DataType: "DLDataType",
@@ -150,7 +151,10 @@ class MetadataType:
         elif self.python_type is str:
             return "const char*"
         elif self.is_array:
-            return f"{self.element_type.c_type}*"
+            if self.element_type.python_type is str:
+                return "char**"  # str is special-cased (list of lists)
+            else:
+                return f"{self.element_type.c_type}*"
         elif self.is_object:
             if self.is_element_type:
                 return f"struct TVM{self.python_type.__name__}"
@@ -161,7 +165,7 @@ class MetadataType:
 
     @property
     def cpp_type(self) -> str:
-        if self.python_type in (int, float):
+        if self.python_type in (int, float, bool):
             return self.C_TYPE_BY_PYTHON_TYPE[self.python_type]
         elif self.python_type is str:
             return "::tvm::runtime::String"
@@ -188,11 +192,11 @@ class MetadataType:
         elif self.is_object:
             return self.python_type.__name__
         else:
-            raise TypeError(f"field {field.name}: unknown type {self.python_type}")
+            raise TypeError(f"unknown type {self.python_type}")
 
     @property
     def is_primitive(self) -> bool:
-        return self.python_type in (int, float, DataType)
+        return self.python_type in (bool, int, float, DataType)
 
     @property
     def in_memory_storage_type(self) -> str:
@@ -340,13 +344,13 @@ def generate_class(obj, header, impl):
                 else:
                     element_ctype = field.type.element_type.c_type
                     if field.type.element_type.python_type is str:
-                        element_ctype = element_type.rstrip("*")  # String is special-cased list-of-lists
-                    cls.write(f"ArrayAccessor<const {element_ctype}*, {element_type.cpp_type}> {field.name}();")
-                    with impl.scope(f"ArrayAccessor<const {element_ctype}*, {element_type.cpp_type}> {obj.__name__}Node::{field.name}() {{", "}") as func:
+                        element_ctype = "const char*" #element_type.c_type.rstrip("*")  # String is special-cased list-of-lists
+                    cls.write(f"ArrayAccessor<{element_ctype}, {element_type.cpp_type}> {field.name}();")
+                    with impl.scope(f"ArrayAccessor<{element_ctype}, {element_type.cpp_type}> {obj.__name__}Node::{field.name}() {{", "}") as func:
                         func.write(
                             f"if ({field.name}_refs_.get() == nullptr) {{ {field.name}_refs_.reset(new ::std::vector<{element_type.cpp_type}>()); }}")
                         func.write(
-                            f"return ArrayAccessor<const {element_ctype}*, {element_type.cpp_type}>(&data_->{field.name}, data_->num_{field.name}, {field.name}_refs_);")
+                            f"return ArrayAccessor<{element_ctype}, {element_type.cpp_type}>(data_->{field.name}, data_->num_{field.name}, {field.name}_refs_);")
             else:
                 cls.write(f"inline {field.type.cpp_type} {field.name}() const {{ return {field.type.cpp_type}(data_->{field.name}); }}")
 

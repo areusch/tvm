@@ -97,7 +97,7 @@ class ArrayAccessor {
     }
 
     if (!(*refs_)[index].defined()) {
-      (*refs_)[index] = Ref(data_[index]);
+      (*refs_)[index] = Ref(&data_[index]);
     }
 
     return (*refs_)[index];
@@ -118,16 +118,40 @@ class ArrayAccessor {
 };
 
 template <>
-class ArrayAccessor<const char*, ::std::string> {
+class ArrayAccessor<const char*, ::tvm::runtime::String> {
  public:
-  ArrayAccessor(const char** data) : data_{data} {}
+  ArrayAccessor(const char** data, size_t num_data, ::std::shared_ptr<std::vector<::tvm::runtime::String>> refs) : data_{data}, num_data_{num_data}, refs_{refs} {}
 
-  inline ::std::string operator[](int index) {
-    return ::std::string{data_[index]};
+  inline size_t size() { return num_data_; }
+
+  inline ::tvm::runtime::String operator[](size_t index) {
+    if (index >= num_data_) {
+      throw std::runtime_error("Index out of range");
+    }
+
+    if (refs_->size() <= index) {
+      refs_->resize(num_data_);
+    }
+
+    if (!(*refs_)[index].defined()) {
+      (*refs_)[index] = ::tvm::runtime::String(data_[index]);
+    }
+
+    return (*refs_)[index];
+  }
+
+  inline ArrayIterator<const char*, ::tvm::runtime::String> begin() {
+    return ArrayIterator<const char*, ::tvm::runtime::String>{0, this};
+  }
+
+  inline ArrayIterator<const char*, ::tvm::runtime::String> end() {
+    return ArrayIterator<const char*, ::tvm::runtime::String>{num_data_, this};
   }
 
  private:
   const char** data_;
+  size_t num_data_;
+  ::std::shared_ptr<::std::vector<::tvm::runtime::String>> refs_;
 };
 
 enum MetadataTypeIndex : uint8_t {

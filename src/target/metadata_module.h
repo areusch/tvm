@@ -55,7 +55,7 @@ namespace codegen {
 runtime::Module CreateMetadataModule(
     const std::unordered_map<std::string, runtime::NDArray>& params, runtime::Module target_module,
     const Array<runtime::Module>& ext_modules, Target target, tvm::relay::Runtime runtime,
-    runtime::Metadata metadata);
+    runtime::metadata::Metadata metadata);
 
 }  // namespace codegen
 }  // namespace tvm

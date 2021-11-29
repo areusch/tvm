@@ -160,6 +160,7 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
 
  protected:
   std::stringstream code_;
+  std::string fmt_;
   Array<String> func_names_;
   Target target_;
   relay::Runtime runtime_;
@@ -264,7 +265,7 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
 
     code_ << ") {"
           << "return " << run_func << "(";
-    for (const auto& input : metadata_->inputs) {
+    for (const auto& input : metadata_->inputs()) {
       std::string sanitised_input = input->name();
       std::replace_if(sanitised_input.begin(), sanitised_input.end(), isNotAlnum, '_');
       code_ << "inputs->" << sanitised_input << ",";
@@ -280,11 +281,12 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
       }
     }
 
-    if (!metadata_->devices.empty()) {
+    if (metadata_->num_devices() > 0) {
       code_ << ",";
-      for (const String& device : metadata_->devices) {
+      auto devices = metadata_->devices();
+      for (const String& device : devices) {
         code_ << "devices->" << device;
-        if (device != metadata_->devices.back()) {
+        if (device != devices[devices.size() -1]) {
           code_ << ",";
         }
       }
@@ -315,7 +317,7 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
         GenerateEntrypointForUnpackedAPI(entrypoint_mangled, run_func_mangled);
       }
     } else {
-      ICHECK_EQ(metadata_->interface_api, "packed")
+      ICHECK_EQ(metadata_->interface_api(), "packed")
           << "Packed interface required for packed operators";
       GenerateEntrypointForPackedAPI(entrypoint_mangled, run_func_mangled);
     }
@@ -734,7 +736,11 @@ public:
       is_first_item_ = true;
       address_.push_back(struct_name);
       if (arr != nullptr) {
-        code_ << "const " << arr->c_type << " " << struct_name
+        const char* const_part = "const ";
+        if (strcmp(arr->c_type, "const char*") == 0) {
+          const_part = "";
+        }
+        code_ << const_part << arr->c_type << " " << struct_name
               << "[" << arr->array.size() << "] = {" << std::endl;
         VisitArray(arr);
       } else {
