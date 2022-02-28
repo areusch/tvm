@@ -126,6 +126,9 @@ std::unique_ptr<llvm::TargetMachine> GetLLVMTargetMachine(const Target& target,
  */
 std::string LLVMTargetToString(const Target& target);
 
+void PrintModule(const llvm::Module* mod);
+
+
 }  // namespace codegen
 }  // namespace tvm
 
