@@ -41,20 +41,34 @@ AotExecutor::AotExecutor(tvm::runtime::Module module, const std::vector<Device>&
   auto ret_value = fmetadata();
   metadata_ = ret_value.AsObjectRef<tvm::runtime::metadata::Metadata>();
 
+
+  LOG(INFO) << "num inputs: " << metadata_->num_inputs();
+  LOG(INFO) << "num outputs: " << metadata_->num_outputs();
+  LOG(INFO) << metadata_->mod_name();
+
   for (auto input : metadata_->inputs()) {
     // TODO(areusch): Encode device information in Metadata.
     args_.emplace_back(NDArray::Empty(ShapeTuple(input->shape().begin(), input->shape().end()),
                                       input->dtype(), devices_[0]));
+    for (auto s : input->shape()) {
+      LOG(INFO) << s;
+    }
   }
 
   for (auto output : metadata_->outputs()) {
     args_.emplace_back(NDArray::Empty(ShapeTuple(output->shape().begin(), output->shape().end()),
                                       output->dtype(), devices_[0]));
+    for (auto s: output->shape()) {
+      LOG(INFO) << s;
+    }
   }
 
   for (auto pool : metadata_->pools()) {
     args_.emplace_back(NDArray::Empty(ShapeTuple(pool->shape().begin(), pool->shape().end()),
                                       pool->dtype(), devices_[0]));
+    for (auto s: pool->shape()) {
+      LOG(INFO) << s;
+    }
   }
 }
 
