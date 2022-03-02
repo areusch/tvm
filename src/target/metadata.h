@@ -156,7 +156,7 @@ class VisitableTensorInfoNode : public ::tvm::runtime::metadata::TensorInfoNode 
       shape_array.push_back(::tvm::Integer{static_cast<int>(shape_accessor[i])});
     }
     ::tvm::runtime::metadata::MetadataArray shape_metadata_array{
-        shape_array, ::tvm::runtime::metadata::MetadataTypeIndex::kInt64, nullptr};
+        shape_array, ::tvm::runtime::metadata::MetadataTypeIndex::kInt64, "int64_t"};
     v->Visit("shape", &shape_metadata_array);
     int64_t num_shape_cpp = num_shape();
     v->Visit("num_shape", &num_shape_cpp);

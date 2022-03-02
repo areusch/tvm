@@ -468,7 +468,8 @@ void CodeGenLLVM::AddFunctionsOrdered(IterType begin, IterType end, ConvType pfu
   std::sort(funcs.begin(), funcs.end(), [](PrimFunc func_a, PrimFunc func_b) {
     std::string name_a = func_a->GetAttr<String>(tvm::attr::kGlobalSymbol).value();
     std::string name_b = func_b->GetAttr<String>(tvm::attr::kGlobalSymbol).value();
-    return name_a < name_b;
+    // TODO(masahi,areusch): AoT codegen should not depend on the sort order
+    return name_a > name_b;
   });
   for (auto& f : funcs) {
     auto global_symbol = f->GetAttr<String>(tvm::attr::kGlobalSymbol);

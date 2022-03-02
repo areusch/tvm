@@ -955,6 +955,14 @@ struct MetadataLlvmTypes {
   ::std::unordered_map<::std::string, llvm::StructType*> structs;
 };
 
+template <typename T>
+void PrintLLVM(const T* llvm_obj) {
+  std::string modpe_str;
+  llvm::raw_string_ostream rso(modpe_str);
+  llvm_obj->print(rso);
+  LOG(INFO) << rso.str();
+}
+
 class MetadataTypeDefiner : public AttrVisitor {
  public:
   MetadataTypeDefiner(llvm::LLVMContext* ctx, struct MetadataLlvmTypes* llvm_types)
@@ -1135,11 +1143,13 @@ class MetadataSerializerLLVM : public AttrVisitor {
         VisitMetadata(Downcast<runtime::metadata::MetadataBase>(o));
       }
     }
+
     auto array = elements_.back();
     elements_.pop_back();
     CHECK(element_type != nullptr);
     auto arr_ty = llvm::ArrayType::get(element_type, array.size());
     auto llvm_arr = llvm::ConstantArray::get(arr_ty, array);
+    ICHECK(arr->struct_name);
     auto arr_gv = codegen_->GetGlobalConstant(llvm_arr, arr->struct_name);
 
     if (elements_.size() > 0) {
