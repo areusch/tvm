@@ -30,6 +30,7 @@
 #include <unordered_map>
 
 #include "../func_registry_generator.h"
+#include "../metadata_utils.h"
 #include "codegen_cpu.h"
 
 namespace tvm {
@@ -965,6 +966,8 @@ void PrintLLVM(const T* llvm_obj) {
 
 class MetadataTypeDefiner : public AttrVisitor {
  public:
+  using MetadataTypeIndex = runtime::metadata::MetadataTypeIndex;
+
   MetadataTypeDefiner(llvm::LLVMContext* ctx, struct MetadataLlvmTypes* llvm_types)
       : ctx_{ctx}, llvm_types_{llvm_types} {}
 
@@ -1009,29 +1012,48 @@ class MetadataTypeDefiner : public AttrVisitor {
 
  public:
   void VisitArray(const runtime::metadata::MetadataArrayNode* arr) {
-    if (arr->type_index == runtime::metadata::MetadataTypeIndex::kString) {
+    auto type_index = arr->type_index;
+
+    switch (type_index) {
+    case MetadataTypeIndex::kBool:
+      elements_.back().emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_bool));
+      break;
+    case MetadataTypeIndex::kString:
       elements_.back().emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_cstring));
-    } else if (arr->type_index == runtime::metadata::MetadataTypeIndex::kUint64) {
+      break;
+    case MetadataTypeIndex::kUint64:
       elements_.back().emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_int64));
-    } else if (arr->type_index == runtime::metadata::MetadataTypeIndex::kInt64) {
+      break;
+    case MetadataTypeIndex::kInt64:
+      LOG(INFO) << "EMIT INT64!";
       elements_.back().emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_int64));
-    } else if (arr->type_index == runtime::metadata::MetadataTypeIndex::kMetadata) {
-      ICHECK(!arr->array.empty());
-      runtime::metadata::MetadataBase metadata =
-          Downcast<runtime::metadata::MetadataBase>(arr->array[0]);
-      VisitMetadataBase(metadata);
-      if (elements_.size() > 0) {
-        auto struct_ty = llvm_types_->structs[metadata->get_name()];
-        ICHECK(struct_ty);
-        elements_.back().emplace_back(llvm::PointerType::getUnqual(struct_ty));
+      break;
+    case MetadataTypeIndex::kHandle:
+      elements_.back().emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_void_p));
+      break;
+    case MetadataTypeIndex::kMetadata: {
+      LOG(INFO) << "EMIT METADATA! " << arr->struct_name;
+      auto struct_ty_it = llvm_types_->structs.find(arr->struct_name);
+      if (struct_ty_it != llvm_types_->structs.end()) {
+        elements_.back().emplace_back(llvm::PointerType::getUnqual((*struct_ty_it).second));
+      } else {
+        // When MetadataQueuer did not find this type, use a void* instead.
+        elements_.back().emplace_back(llvm_types_->t_void_p);
       }
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected type_index " << type_index;
+      break;
     }
   }
 
   void Visit(const char* key, ObjectRef* value) final {
     const runtime::metadata::MetadataArrayNode* arr =
         value->as<runtime::metadata::MetadataArrayNode>();
+    LOG(INFO) << "Visit obj ";
     if (arr != nullptr) {
+      LOG(INFO) << "Visit array! " << ": " << arr->type_index << ", " << arr->struct_name;
       VisitArray(arr);
       return;
     }
@@ -1040,7 +1062,7 @@ class MetadataTypeDefiner : public AttrVisitor {
     VisitMetadataBase(metadata);
   }
 
-  void DefineTypes(runtime::metadata::Metadata metadata) { Visit(nullptr, &metadata); }
+  void DefineTypes(runtime::metadata::MetadataBase metadata) { Visit(nullptr, &metadata); }
 
   llvm::LLVMContext* ctx_;
   struct MetadataLlvmTypes* llvm_types_;
@@ -1196,8 +1218,15 @@ void CodeGenCPU::DefineMetadata(runtime::metadata::Metadata metadata) {
       llvm::StructType::create(*ctx_, {t_int8_, t_int8_, t_int8_}, "DLDataType") /* t_data_type */,
   };
 
+  std::vector<MetadataQueuer::QueueItem> queue;
+  MetadataQueuer queuer{&queue};
+  queuer.Visit(kMetadataGlobalSymbol, &metadata);
+
   MetadataTypeDefiner definer{ctx_, &llvm_types};
-  definer.DefineTypes(metadata);
+  for (auto q : queue) {
+    auto metadata = std::get<1>(q);
+    definer.DefineTypes(metadata);
+  }
 
   MetadataSerializerLLVM serializer{this, &llvm_types};
   auto metadata_constant_gv = serializer.Serialize(metadata);

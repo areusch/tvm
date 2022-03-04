@@ -28,7 +28,6 @@
 #include <tvm/runtime/registry.h>
 
 #include <string>
-#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -39,6 +38,7 @@
 #include "../../support/str_escape.h"
 #include "../func_registry_generator.h"
 #include "../metadata.h"
+#include "../metadata_utils.h"
 #include "codegen_source_base.h"
 
 namespace tvm {
@@ -522,71 +522,8 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
   }
 };
 
-static std::string address_from_parts(const std::vector<std::string>& parts) {
-  std::stringstream ss;
-  for (unsigned int i = 0; i < parts.size(); ++i) {
-    if (i > 0) {
-      ss << "_";
-    }
-    ss << parts[i];
-  }
-  return ss.str();
-}
-
-class MetadataQueuer : public AttrVisitor {
- public:
-  using QueueItem = std::tuple<std::string, runtime::metadata::MetadataBase>;
-  explicit MetadataQueuer(std::vector<QueueItem>* queue) : queue_{queue} {}
-
-  void Visit(const char* key, double* value) final {}
-  void Visit(const char* key, int64_t* value) final {}
-  void Visit(const char* key, uint64_t* value) final {}
-  void Visit(const char* key, int* value) final {}
-  void Visit(const char* key, bool* value) final {}
-  void Visit(const char* key, std::string* value) final {}
-  void Visit(const char* key, DataType* value) final {}
-  void Visit(const char* key, runtime::NDArray* value) final {}
-  void Visit(const char* key, void** value) final {}
-
-  void Visit(const char* key, ObjectRef* value) final {
-    address_parts_.push_back(key);
-    if (value->as<runtime::metadata::MetadataBaseNode>() != nullptr) {
-      auto metadata = Downcast<runtime::metadata::MetadataBase>(*value);
-      const runtime::metadata::MetadataArrayNode* arr =
-          value->as<runtime::metadata::MetadataArrayNode>();
-      std::cout << "Is array? " << arr << std::endl;
-      if (arr != nullptr) {
-        for (unsigned int i = 0; i < arr->array.size(); i++) {
-          ObjectRef o = arr->array[i];
-          std::cout << "queue-visiting array element " << i << ": " << o->type_index() << " ("
-                    << o.operator->() << ")" << std::endl;
-          if (o.as<runtime::metadata::MetadataBaseNode>() != nullptr) {
-            std::stringstream ss;
-            ss << i;
-            address_parts_.push_back(ss.str());
-            runtime::metadata::MetadataBase metadata = Downcast<runtime::metadata::MetadataBase>(o);
-            ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
-            address_parts_.pop_back();
-          }
-        }
-      } else {
-        ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
-      }
-
-      queue_->push_back(std::make_tuple(address_from_parts(address_parts_),
-                                        Downcast<runtime::metadata::MetadataBase>(*value)));
-    }
-    address_parts_.pop_back();
-  }
-
- private:
-  std::vector<QueueItem>* queue_;
-  std::vector<std::string> address_parts_;
-};
-
 class MetadataSerializer : public AttrVisitor {
  public:
-  static constexpr const char* kGlobalSymbol = "kTvmgenMetadata";
   using MetadataTypeIndex = ::tvm::runtime::metadata::MetadataTypeIndex;
 
   MetadataSerializer() : is_first_item_{true} {}
@@ -719,7 +656,7 @@ class MetadataSerializer : public AttrVisitor {
           << "#include <tvm/runtime/c_runtime_api.h>" << std::endl;
     std::vector<MetadataQueuer::QueueItem> queue;
     MetadataQueuer queuer{&queue};
-    queuer.Visit(kGlobalSymbol, &metadata);
+    queuer.Visit(kMetadataGlobalSymbol, &metadata);
 
     for (MetadataQueuer::QueueItem item : queue) {
       auto struct_name = std::get<0>(item);
@@ -812,7 +749,7 @@ runtime::Module CreateCSourceCppMetadataModule(runtime::metadata::Metadata metad
   lookup_func << "TVM_DLL int32_t get_c_metadata(TVMValue* arg_values, int* arg_tcodes, int "
                  "num_args, TVMValue* ret_values, int* ret_tcodes, void* resource_handle) {"
               << std::endl;
-  lookup_func << "    ret_values[0].v_handle = (void*) &" << MetadataSerializer::kGlobalSymbol
+  lookup_func << "    ret_values[0].v_handle = (void*) &" << kMetadataGlobalSymbol
               << ";" << std::endl;
   lookup_func << "    ret_tcodes[0] = kTVMOpaqueHandle;" << std::endl;
   lookup_func << "    return 0;" << std::endl;
