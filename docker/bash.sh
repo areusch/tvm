@@ -314,7 +314,7 @@ fi
 # PID namespace (--pid=host).  The process inside does not have pid 1
 # and SIGKILL is propagated to the process inside, allowing jenkins to
 # kill it if needed.
-DOCKER_FLAGS+=( --rm --pid=host)
+DOCKER_FLAGS+=( --pid=host)
 
 # Expose services running in container to the host.
 if $USE_NET_HOST; then

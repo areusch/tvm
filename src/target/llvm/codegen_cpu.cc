@@ -945,6 +945,7 @@ llvm::Value* CodeGenCPU::RuntimeTVMParallelBarrier() {
   return GetContextPtr(gv_tvm_parallel_barrier_);
 }
 
+/*! \brief Defines LLVM Types for each Metadata member type. */
 struct MetadataLlvmTypes {
   llvm::Type* t_float64;
   llvm::Type* t_uint8;
@@ -953,7 +954,9 @@ struct MetadataLlvmTypes {
   llvm::Type* t_cstring;
   llvm::Type* t_void_p;
   llvm::StructType* t_data_type;
-  ::std::unordered_map<::std::string, llvm::StructType*> structs;
+
+  /*! \brief Maps a MetadataBase subclass' type_key to its corresponding LLVM StructType. */
+  ::std::unordered_map<std::string, llvm::StructType*> structs_by_type_key;
 };
 
 template <typename T>
@@ -965,85 +968,73 @@ void PrintLLVM(const T* llvm_obj) {
 }
 
 class MetadataTypeDefiner : public AttrVisitor {
- public:
-  using MetadataTypeIndex = runtime::metadata::MetadataTypeIndex;
-
-  MetadataTypeDefiner(llvm::LLVMContext* ctx, struct MetadataLlvmTypes* llvm_types)
-      : ctx_{ctx}, llvm_types_{llvm_types} {}
+public:
+  MetadataTypeDefiner(llvm::LLVMContext* ctx, struct MetadataLlvmTypes* llvm_types) : ctx_{ctx}, llvm_types_{llvm_types} {}
 
   void Visit(const char* key, double* value) final {
-    elements_.back().emplace_back(llvm_types_->t_float64);
+    elements_.emplace_back(llvm_types_->t_float64);
   }
   void Visit(const char* key, int64_t* value) final {
-    elements_.back().emplace_back(llvm_types_->t_int64);
+    elements_.emplace_back(llvm_types_->t_int64);
   }
   void Visit(const char* key, uint64_t* value) final {
-    elements_.back().emplace_back(llvm_types_->t_int64);
+    elements_.emplace_back(llvm_types_->t_int64);
   }
   void Visit(const char* key, int* value) final {
-    elements_.back().emplace_back(llvm_types_->t_int64);
+    elements_.emplace_back(llvm_types_->t_int64);
   }
   void Visit(const char* key, bool* value) final {
-    elements_.back().emplace_back(llvm_types_->t_bool);
+    elements_.emplace_back(llvm_types_->t_bool);
   }
   void Visit(const char* key, std::string* value) final {
-    elements_.back().emplace_back(llvm_types_->t_cstring);
+    elements_.emplace_back(llvm_types_->t_cstring);
   }
   void Visit(const char* key, void** value) final {
-    elements_.back().emplace_back(llvm_types_->t_void_p);
+    elements_.emplace_back(llvm_types_->t_void_p);
   }
   void Visit(const char* key, DataType* value) final {
-    elements_.back().emplace_back(llvm_types_->t_data_type);
+    elements_.emplace_back(llvm_types_->t_data_type);
   }
   void Visit(const char* key, runtime::NDArray* value) final {
     CHECK(false) << "Do not support serializing NDArray";
   }
 
- private:
+private:
   void VisitMetadataBase(runtime::metadata::MetadataBase metadata) {
-    if (llvm_types_->structs.find(metadata->get_name()) == llvm_types_->structs.end()) {
-      elements_.emplace_back(std::vector<llvm::Type*>());
-      ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
-      llvm_types_->structs[metadata->get_name()] =
-          llvm::StructType::create(*ctx_, elements_.back(), metadata->get_name());
-      elements_.pop_back();
+    elements_.emplace_back(llvm::PointerType::getUnqual(llvm::StructType::create(*ctx_, metadata->get_c_struct_name())));
+    if (visited_.find(metadata->get_c_struct_name()) != visited_.end()) {
+      return;
     }
+
+    if (to_visit_.find(metadata->get_c_struct_name()) != to_visit_.end()) {
+      return;
+    }
+    to_visit_[metadata->get_c_struct_name()] = metadata;
   }
 
- public:
-  void VisitArray(const runtime::metadata::MetadataArrayNode* arr) {
-    auto type_index = arr->type_index;
+public:
+  using MetadataKind = runtime::metadata::MetadataKind;
 
-    switch (type_index) {
-    case MetadataTypeIndex::kBool:
-      elements_.back().emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_bool));
+  void VisitArray(const runtime::metadata::MetadataArrayNode* arr) {
+    switch (arr->kind) {
+    case MetadataKind::kUint64:  // LLVM encodes signed and unsigned with same types.
+    case MetadataKind::kInt64:
+      elements_.emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_int64));
       break;
-    case MetadataTypeIndex::kString:
-      elements_.back().emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_cstring));
+    case MetadataKind::kBool:
+      elements_.emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_bool));
       break;
-    case MetadataTypeIndex::kUint64:
-      elements_.back().emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_int64));
+    case MetadataKind::kString:
+      elements_.emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_cstring));
       break;
-    case MetadataTypeIndex::kInt64:
-      LOG(INFO) << "EMIT INT64!";
-      elements_.back().emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_int64));
+    case MetadataKind::kHandle:
+      CHECK(false) << "Do not support handle";
       break;
-    case MetadataTypeIndex::kHandle:
-      elements_.back().emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_void_p));
+    case MetadataKind::kMetadata:
+      elements_.emplace_back(llvm::PointerType::getUnqual(llvm_types_->structs_by_type_key[arr->type_key]));
       break;
-    case MetadataTypeIndex::kMetadata: {
-      LOG(INFO) << "EMIT METADATA! " << arr->struct_name;
-      auto struct_ty_it = llvm_types_->structs.find(arr->struct_name);
-      if (struct_ty_it != llvm_types_->structs.end()) {
-        elements_.back().emplace_back(llvm::PointerType::getUnqual((*struct_ty_it).second));
-      } else {
-        // When MetadataQueuer did not find this type, use a void* instead.
-        elements_.back().emplace_back(llvm_types_->t_void_p);
-      }
-      break;
-    }
     default:
-      LOG(FATAL) << "Unexpected type_index " << type_index;
+      CHECK(false) << "Unsupported metadata kind " << arr->kind;
       break;
     }
   }
@@ -1051,26 +1042,37 @@ class MetadataTypeDefiner : public AttrVisitor {
   void Visit(const char* key, ObjectRef* value) final {
     const runtime::metadata::MetadataArrayNode* arr =
         value->as<runtime::metadata::MetadataArrayNode>();
-    LOG(INFO) << "Visit obj ";
     if (arr != nullptr) {
-      LOG(INFO) << "Visit array! " << ": " << arr->type_index << ", " << arr->struct_name;
       VisitArray(arr);
-      return;
+    } else {
+      elements_.emplace_back(llvm::PointerType::getUnqual(llvm_types_->structs_by_type_key[(*value)->GetTypeKey()]));
     }
-
-    runtime::metadata::MetadataBase metadata = Downcast<runtime::metadata::MetadataBase>(*value);
-    VisitMetadataBase(metadata);
   }
 
-  void DefineTypes(runtime::metadata::MetadataBase metadata) { Visit(nullptr, &metadata); }
+  void DefineType(runtime::metadata::MetadataBase metadata) {
+    ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
+    LOG(INFO) << "Created type for " << metadata->GetTypeKey() << ":";
+    for (auto e : elements_) {
+      std::string value;
+      llvm::raw_string_ostream os(value);
+      e->print(os, true);
+//      LOG(INFO) << " - " << e << ", tyid=" << e->getTypeID() << " == " << value;
+//      e->dump();
+    }
+    llvm_types_->structs_by_type_key[metadata->GetTypeKey()] = llvm::StructType::create(*ctx_, elements_, metadata->get_c_struct_name());
+    elements_.clear();
+  }
 
   llvm::LLVMContext* ctx_;
   struct MetadataLlvmTypes* llvm_types_;
-  std::vector<std::vector<llvm::Type*>> elements_;
+  ::std::unordered_set<::std::string> visited_;
+  ::std::unordered_map<::std::string, runtime::metadata::MetadataBase> to_visit_;
+  ::std::vector<llvm::Type*> elements_;
 };
 
+
 class MetadataSerializerLLVM : public AttrVisitor {
-  using MetadataTypeIndex = runtime::metadata::MetadataTypeIndex;
+  using MetadataKind = runtime::metadata::MetadataKind;
 
  public:
   MetadataSerializerLLVM(CodeGenLLVM* codegen, struct MetadataLlvmTypes* llvm_types)
@@ -1118,8 +1120,19 @@ class MetadataSerializerLLVM : public AttrVisitor {
     ReflectionVTable::Global()->VisitAttrs(metadata.operator->(), this);
     auto struct_elements = elements_.back();
     elements_.pop_back();
-    auto struct_ty = llvm_types_->structs[metadata->get_name()];
-    CHECK(struct_ty);
+    auto struct_ty = llvm_types_->structs_by_type_key[metadata->GetTypeKey()];
+    ICHECK(struct_ty != nullptr) << "Did not find LLVM StructType* for type_key=" << metadata->GetTypeKey();
+    std::string ty_value;
+    llvm::raw_string_ostream ty_os(ty_value);
+    struct_ty->print(ty_os, true);
+    LOG(INFO) << "Get LLVM ConstantStruct (" << struct_elements.size() << " elements)";
+    LOG(INFO) << "  Type (" << metadata->GetTypeKey() << "==" << struct_ty->getName().data() << "): " << ty_value;
+    for (auto e : struct_elements) {
+      std::string value;
+      llvm::raw_string_ostream os(value);
+      e->print(os);
+      LOG(INFO) << " - " << value;
+    }
     CHECK_EQ(struct_elements.size(), struct_ty->getNumElements());
     auto out = llvm::ConstantStruct::get(struct_ty, struct_elements);
     if (elements_.size() > 0) {
@@ -1131,27 +1144,33 @@ class MetadataSerializerLLVM : public AttrVisitor {
 
   void VisitArray(const runtime::metadata::MetadataArrayNode* arr) {
     llvm::Type* element_type;
-    if (arr->type_index == MetadataTypeIndex::kInt64) {
+    switch (arr->kind) {
+    case MetadataKind::kInt64:
       element_type = llvm_types_->t_int64;
-    } else if (arr->type_index == MetadataTypeIndex::kUint64) {
+      break;
+    case MetadataKind::kUint64:
       element_type = llvm_types_->t_int64;
-    } else if (arr->type_index == MetadataTypeIndex::kBool) {
+      break;
+    case MetadataKind::kBool:
       element_type = llvm_types_->t_uint8;
-    } else if (arr->type_index == MetadataTypeIndex::kString) {
+      break;
+    case MetadataKind::kString:
       element_type = llvm_types_->t_cstring;
-    } else if (arr->type_index == MetadataTypeIndex::kMetadata) {
-      runtime::metadata::MetadataBase metadata =
-          Downcast<runtime::metadata::MetadataBase>(arr->array[0]);
-      element_type = llvm_types_->structs[metadata->get_name()];
-    } else {
-      LOG(FATAL) << "unknown metadata type_index " << arr->type_index;
+      break;
+    case MetadataKind::kMetadata: {
+      element_type = llvm_types_->structs_by_type_key[arr->type_key];
+      ICHECK(element_type != nullptr) << "Did not find LLVM StructType* for type_key=" << arr->type_key;
+      break;
+    }
+    default:
+      LOG(FATAL) << "unknown metadata kind " << arr->kind;
+      break;
     }
 
     elements_.emplace_back(std::vector<llvm::Constant*>());
     for (auto o : arr->array) {
       if (o->IsInstance<FloatImmNode>()) {
         double value = Downcast<FloatImm>(o)->value;
-        ;
         Visit(nullptr, &value);
       }
       if (o->IsInstance<IntImmNode>()) {
@@ -1171,13 +1190,11 @@ class MetadataSerializerLLVM : public AttrVisitor {
     CHECK(element_type != nullptr);
     auto arr_ty = llvm::ArrayType::get(element_type, array.size());
     auto llvm_arr = llvm::ConstantArray::get(arr_ty, array);
-    ICHECK(arr->struct_name);
-    auto arr_gv = codegen_->GetGlobalConstant(llvm_arr, arr->struct_name);
 
     if (elements_.size() > 0) {
-      elements_.back().emplace_back(arr_gv);
+      elements_.back().emplace_back(codegen_->GetGlobalConstant(llvm_arr, "", llvm::GlobalValue::PrivateLinkage));
     } else {
-      last_production_ = arr_gv;
+      last_production_ = llvm_arr;
     }
   }
 
@@ -1218,14 +1235,15 @@ void CodeGenCPU::DefineMetadata(runtime::metadata::Metadata metadata) {
       llvm::StructType::create(*ctx_, {t_int8_, t_int8_, t_int8_}, "DLDataType") /* t_data_type */,
   };
 
-  std::vector<MetadataQueuer::QueueItem> queue;
-  MetadataQueuer queuer{&queue};
-  queuer.Visit(kMetadataGlobalSymbol, &metadata);
+  std::vector<runtime::metadata::MetadataBase> queue;
+  metadata::DiscoverComplexTypesVisitor discover_complex{&queue};
+  discover_complex.Discover(metadata);
 
   MetadataTypeDefiner definer{ctx_, &llvm_types};
-  for (auto q : queue) {
-    auto metadata = std::get<1>(q);
-    definer.DefineTypes(metadata);
+  for (auto md : queue) {
+    if (md.defined()) {
+      definer.DefineType(md);
+    }
   }
 
   MetadataSerializerLLVM serializer{this, &llvm_types};
@@ -1389,6 +1407,12 @@ void CodeGenCPU::VisitStmt_(const AssertStmtNode* op) {
   builder_->CreateCondBr(cond, end_block, fail_block, md_very_likely_branch_);
   // fail condition.
   builder_->SetInsertPoint(fail_block);
+
+  std::vector<llvm::Type *> AsmArgTypes;
+  llvm::FunctionType *AsmFTy = llvm::FunctionType::get(t_void_, false);
+  llvm::InlineAsm *IA =
+    llvm::InlineAsm::get(AsmFTy, "int 3", "", true, /* IsAlignStack */ false, llvm::InlineAsm::AD_Intel);
+  builder_->CreateCall(AsmFTy, IA);
 #if TVM_LLVM_VERSION >= 90
   auto err_callee =
       llvm::FunctionCallee(ftype_tvm_api_set_last_error_, RuntimeTVMAPISetLastError());

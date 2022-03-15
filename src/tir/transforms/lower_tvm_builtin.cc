@@ -82,10 +82,12 @@ class BuiltinLower : public StmtExprMutator {
     // allocate space to hold prepare stmts before s
     prep_seq_stack_.emplace_back(std::vector<Stmt>());
 
-    auto stmt = StmtExprMutator::VisitStmt(s);
     auto& scope = alloca_scope_.back();
-    ICHECK_EQ(scope.run_shape_stack, -1);
-    ICHECK_EQ(scope.run_array_stack, 0);
+    auto original_run_shape_stack = scope.run_shape_stack;
+    auto original_run_array_stack = scope.run_array_stack;
+    auto stmt = StmtExprMutator::VisitStmt(s);
+    ICHECK_EQ(scope.run_shape_stack, original_run_shape_stack);
+    ICHECK_EQ(scope.run_array_stack, original_run_array_stack);
 
     auto prep_seq = std::move(prep_seq_stack_.back());
     prep_seq_stack_.pop_back();

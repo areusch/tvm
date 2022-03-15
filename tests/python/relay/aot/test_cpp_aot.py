@@ -85,6 +85,7 @@ def test_conv2d(enable_usmp, target_kind):
 
     temp_dir = tvm.contrib.utils.TempDirectory()
     test_so_path = temp_dir / "test.so"
+    mod.export_library("test.tar")
     mod.export_library(test_so_path, cc="gcc", options=["-std=c11"])
     loaded_mod = tvm.runtime.load_module(test_so_path)
     runner = tvm.runtime.executor.AotModule(loaded_mod["default"](tvm.cpu(0)))

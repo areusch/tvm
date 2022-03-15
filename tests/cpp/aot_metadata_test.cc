@@ -274,3 +274,8 @@ TEST(Metadata, ZeroElementLists) {
   EXPECT_THAT(md->num_pools(), Eq(0));
   EXPECT_THAT(md->pools(), ElementsAre());
 }
+
+TEST(Metadata, GetCStructName) {
+  EXPECT_THAT(tvm::runtime::metadata::get_c_struct_name<MetadataNode>(), EqStr("TVMMetadata"));
+  EXPECT_THAT(tvm::runtime::metadata::get_c_struct_name<TensorInfoNode>(), EqStr("TVMTensorInfo"));
+}

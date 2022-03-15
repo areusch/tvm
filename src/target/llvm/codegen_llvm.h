@@ -23,7 +23,7 @@
  */
 #ifndef TVM_TARGET_LLVM_CODEGEN_LLVM_H_
 #define TVM_TARGET_LLVM_CODEGEN_LLVM_H_
-#include <llvm-13/llvm/IR/GlobalValue.h>
+#include <llvm/IR/GlobalValue.h>
 #ifdef TVM_LLVM_VERSION
 
 #include <tvm/arith/analyzer.h>
@@ -371,7 +371,7 @@ class CodeGenLLVM : public ExprFunctor<llvm::Value*(const PrimExpr&)>,
 #if TVM_LLVM_VERSION >= 100
     return function->getArg(i);
 #elif TVM_LLVM_VERSION >= 50
-    return &function->arg_begin()[i];
+    return const_cast<llvm::Argument*>(&function->arg_begin()[i]);
 #else
     return &*std::next(function->arg_begin(), i);
 #endif

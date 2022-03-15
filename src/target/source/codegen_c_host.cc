@@ -344,7 +344,7 @@ inline void CodeGenCHost::PrintTernaryCondExpr(const T* op, const char* compare,
 runtime::Module BuildCHost(IRModule mod, Target target) {
   using tvm::runtime::Registry;
   bool output_ssa = false;
-  bool emit_asserts = false;
+  bool emit_asserts = true;
   CodeGenCHost cg;
   cg.Init(output_ssa, emit_asserts, target->str());
   cg.SetConstantsByteAlignment(target->GetAttr<Integer>("constants-byte-alignment").value_or(16));

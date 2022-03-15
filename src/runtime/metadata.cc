@@ -47,25 +47,27 @@ ArrayAccessor<struct TVMTensorInfo, TensorInfo> MetadataNode::pools() {
 
 TVM_REGISTER_OBJECT_TYPE(MetadataBaseNode);
 
-MetadataArray::MetadataArray(Array<ObjectRef> array, MetadataTypeIndex type_index,
+MetadataArray::MetadataArray(Array<ObjectRef> array, MetadataKind kind,
                              const char* struct_name)
-    : MetadataBase{make_object<MetadataArrayNode>(array, type_index, struct_name)} {}
+    : MetadataBase{make_object<MetadataArrayNode>(array, kind, struct_name)} {}
 
-std::string MetadataArrayNode::get_name() { return "MetadataArray"; }
-
+const char* MetadataArrayNode::get_c_struct_name() const {
+  ICHECK(false) << "MetadataArrayNode get_c_struct_name is unimplemented";
+  return nullptr;
+}
 TVM_REGISTER_OBJECT_TYPE(MetadataArrayNode);
 
 Metadata::Metadata(const struct ::TVMMetadata* data)
     : MetadataBase{make_object<MetadataNode>(data)} {}
 TVM_REGISTER_OBJECT_TYPE(MetadataNode);
 
-std::string MetadataNode::get_name() { return "Metadata"; }
+const char* MetadataNode::get_c_struct_name()  const { return "TVMMetadata"; }
 
 TensorInfo::TensorInfo(const struct ::TVMTensorInfo* data)
     : MetadataBase{make_object<TensorInfoNode>(data)} {}
 TVM_REGISTER_OBJECT_TYPE(TensorInfoNode);
 
-std::string TensorInfoNode::get_name() { return "TensorInfo"; }
+const char* TensorInfoNode::get_c_struct_name() const { return "TVMTensorInfo"; }
 
 }  // namespace metadata
 
