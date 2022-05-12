@@ -14,9 +14,26 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import json
+import sys
 import tvm
-import pytest
 from tvm import te
+
+import numpy as np
+import pytest
+
+
+def test_optional_ndarray():
+    """A node with an Optional<NDArray> can be serialized and loaded."""
+    x_data = tvm.nd.array(np.array([1, 2, 3], dtype="int32"))
+    x_var = tvm.tir.Var("x", dtype=tvm.ir.PointerType(tvm.ir.PrimType("int32"), "global"))
+    x = tvm.tir.AllocateConst(x_var, x_data.dtype, x_data.shape, x_data, tvm.tir.Evaluate(x_var))
+    json_str = tvm.ir.save_json(x)
+    print('JSON', json_str)
+    json_obj = json.loads(json_str)
+    assert len(json_obj["b64ndarrays"]) > 0, f'want at least 1 b64ndarrays, got: {json_obj}'
+    xx = tvm.ir.load_json(json_str)
+    tvm.ir.assert_structural_equal(xx, x, map_free_vars=True)
 
 
 def test_const_saveload_json():
@@ -161,13 +178,4 @@ def test_dict():
 
 
 if __name__ == "__main__":
-    test_string()
-    test_env_func()
-    test_make_node()
-    test_make_smap()
-    test_const_saveload_json()
-    test_make_sum()
-    test_pass_config()
-    test_dict()
-    test_infinity_value()
-    test_minmax_value()
+    sys.exit(pytest.main([__file__]) + sys.argv[1:])

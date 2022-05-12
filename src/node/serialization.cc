@@ -84,6 +84,7 @@ class NodeIndexer : public AttrVisitor {
   void Visit(const char* key, DataType* value) final {}
 
   void Visit(const char* key, runtime::NDArray* value) final {
+    LOG(INFO) << "Visit NDArray: " << *value;
     DLTensor* ptr = const_cast<DLTensor*>((*value).operator->());
     if (tensor_index_.count(ptr)) return;
     ICHECK_EQ(tensor_index_.size(), tensor_list_.size());
@@ -92,6 +93,14 @@ class NodeIndexer : public AttrVisitor {
   }
 
   void Visit(const char* key, ObjectRef* value) final {
+    if (value != nullptr && value->defined()) {
+      auto ndarray_container = value->as<runtime::NDArray::Container>();
+      if (ndarray_container != nullptr) {
+        runtime::NDArray ndarray = GetRef<runtime::NDArray>(ndarray_container);
+        Visit(key, &ndarray);
+        return;
+      }
+    }
     MakeIndex(const_cast<Object*>(value->get()));
   }
 
@@ -102,6 +111,7 @@ class NodeIndexer : public AttrVisitor {
     if (node_index_.count(node)) {
       return;
     }
+    LOG(INFO) << "MakeNodeIndex (" << node_list_.size() << "): " << GetRef<ObjectRef>(node);
     ICHECK_EQ(node_index_.size(), node_list_.size());
     node_index_[node] = node_list_.size();
     node_list_.push_back(node);
@@ -262,6 +272,14 @@ class JSONAttrGetter : public AttrVisitor {
   }
 
   void Visit(const char* key, ObjectRef* value) final {
+    if (value != nullptr && value->defined()) {
+      auto ndarray_container = value->as<runtime::NDArray::Container>();
+      if (ndarray_container != nullptr) {
+        runtime::NDArray ndarray = GetRef<runtime::NDArray>(ndarray_container);
+        Visit(key, &ndarray);
+        return;
+      }
+    }
     node_->attrs[key] = std::to_string(node_index_->at(const_cast<Object*>(value->get())));
   }
 
