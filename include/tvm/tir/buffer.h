@@ -182,6 +182,7 @@ class Buffer : public ObjectRef {
   TVM_DLL Buffer MakeSlice(Array<PrimExpr> begins, Array<PrimExpr> extents) const;
   /*!
    * \brief Get access ptr to the entire buffer.
+
    * \param access_mask The access mask
    * \param ptr_type The type of the pointer.
    * \param content_lanes The number of lanes for the (data) type.

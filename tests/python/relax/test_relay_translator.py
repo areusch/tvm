@@ -89,10 +89,12 @@ def verify_e2e_translation(target_str, layout, batch_size, image_shape):
     target = Target(target_str)
     dev = tvm.device(str(target), dev_id=0)
     relay_mod, params = get_resnet(batch_size, "float32", layout, image_shape)
+    print("relay", relay_mod)
     input_shape = (1, *image_shape)
     data = tvm.nd.array(np.random.rand(*input_shape).astype(np.float32), dev)
 
     relax_mod = relay_translator.from_relay(relay_mod["main"], target, params)
+    print("relax", relax_mod)
 
     relay_ex, relay_rt_mod, relay_out = relay_build_and_run(relay_mod, target, dev, params, data)
     relax_ex, relax_rt_mod, relax_out = relax_build_and_run(relax_mod, target, dev, params, data)
@@ -100,7 +102,7 @@ def verify_e2e_translation(target_str, layout, batch_size, image_shape):
     tvm.testing.assert_allclose(relay_out, relax_out, atol=1e-5, rtol=1e-5)
 
 
-@pytest.mark.skip(reason="take too much time")
+#@pytest.mark.skip(reason="take too much time")
 @pytest.mark.parametrize(
     "layout, batch_size, image_shape", [("NCHW", 1, (3, 224, 224)), ("NHWC", 1, (224, 224, 3))]
 )
@@ -269,4 +271,4 @@ def test_translate_op_with_tir():
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    tvm.testing.main()

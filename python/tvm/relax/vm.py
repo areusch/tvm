@@ -436,6 +436,7 @@ def build(
     mod: tvm.IRModule,
     target: Union[str, tvm.target.Target],
     params: Optional[Dict[str, list]] = None,
+    backend: str = "vm",
 ) -> Executable:
     """
     Build an IRModule to VM executable.
@@ -482,10 +483,17 @@ def build(
 
     passes = [relax.transform.ToNonDataflow()]
     passes.append(relax.transform.CallTIRRewrite())
-    passes.append(relax.transform.VMMemoryLower())
-    passes.append(relax.transform.VMShapeLower())
+    if backend == "vm":
+        passes.append(relax.transform.VMMemoryLower())
+        passes.append(relax.transform.VMShapeLower())
+    elif backend == "aot":
+        pass
+    else:
+        assert False, "shuld not get here"
     seq = tvm.transform.Sequential(passes)
     new_mod = seq(mod)
+
+    print("NEW MOD", new_mod)
 
     # split primfunc and relax function
     rx_mod, tir_mod = _split_tir_relax(new_mod)
@@ -498,7 +506,14 @@ def build(
     if params is None:
         params = {}
 
-    return Executable(_ffi_api.VMCodeGen(rx_mod, lib, ext_libs, target, params))
+    if backend == "vm":
+        return Executable(_ffi_api.VMCodeGen(rx_mod, lib, ext_libs, target, params))
+    elif backend == "aot":
+        codegen = _ffi_api.AOTExecutorCodegen()
+        codegen["init"]([target])
+        codegen["codegen"](rx_mod, rx_mod["main"], "default") #target, params)
+        main_mod = codegen["get_mod"]()
+        return main_mod
 
 
 def _split_tir_relax(mod: tvm.IRModule) -> Tuple[tvm.IRModule, tvm.IRModule]:
