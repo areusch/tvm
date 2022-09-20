@@ -48,65 +48,19 @@ FCallPacked GetPackedFuncName(const Call& call) {
 
 }  // namespace
 
-// class CallTirLower : public ExprMutator {
-//   static const Op& call_tir_op_ = Op::Get("relax.call_tir");
 
-//   CallTirLower(NameSupply name_supply) : name_supply_(name_supply) ()
-
-//  public:
-//   Expr VisitExpr_(const BindingBlockNode* node) override {
-//     bool did_modify_bindings = false;
-//     Array<Binding> new_bindings;
-//     for (auto binding : node->bindings) {
-//       if (const VarBindingNode* var_binding_node = binding.as<VarBindingNode>()) {
-//         VarBinding var_binding = GetRef<VarBinding>(var_binding_node);
-//         if (const CallNode* call_node = var_binding->value.as<CallNode>()) {
-//           Call call = GetRef<Call>(call_node);
-//           if (call->op.as<OpNode>()) {
-//             bool did_modify_call = false;
-//             Call new_call;
-//             std::tie(new_call, did_modify_call)  = RewriteCall(var_binding->var->name_hint, call_node);
-//             if (did_modify_call) {
-//               new_bindings.emplace_back(VarBinding(var_binding->var, new_call));
-//               did_modify_bindings = true;
-//               continue;
-//             }
-//           }
-//         }
-//       }
-//       new_bindings.emplace_back(binding);
-//     }
-
-//     if (did_modify_bindings) {
-//       return BindingBlock(new_bindings);
-//     } else {
-//       return GetRef<BindingBlock>(node);
-//     }
-//   }
-
-//   std::tie<Call, bool> RewriteCall(String rv_name_hint, Call call) {
-//     if (call_node->op == call_tir_op_) {
-//       return SeqExpr(
-//         Array<BindingBlock>{BindingBlock(Array<Binding>{
-//               VarBinding(Var(name_supply->FreshName(rv_name_hint)),
-//                          Call(aot_op::alloc_tensor_op, Array<Expr>{
-
-
-//       new_bindings.emplace_back(RewriteCallTir(
-//                                   } else if (call_node->op == call_packed_op_) {
-//               new_bindings.emplace_back(RewriteCallPacked(var_binding->var->name_hint, ));
-//             }
-//           }
-
-//   Expr VisitExpr_(const CallNode* call_node) override {
-//     if (call_node->op.as<OpNode>()) {
-
-// Strategy:
-// 1. append all the statements that "realize" a value to a vector
-// 2. return the tir Var that holds the Relax "return value."
-// 3. In BindingBlock and top-level visit, discard the Var. Elsewhere,
-
-
+/*!
+ * \brief Tracks a single value manifested in the Relax program.
+ *
+ * This class is ultimately responsible for determining how to create TIR buffers to form backing
+ * memory for the Relax value (hereafter termed "implementing" the value). On initial creation, this
+ * class simply serves as a central reference point to de-duplicated aliases and serve as a Relax-
+ * level placeholder when tracing the dataflow in ScopeCollector.
+ *
+ * Before synthesizing the TIR main, Implement() must be called to create Buffers. Right now, Buffers are created
+ * only when a tir.allocate node needs to be created (see is_output()). This should probably be factored out
+ * so that the same Buffer-lowering logic is used for the I/O vars as well (is_output() is probably poorly-named/placed).
+ */
 class RealizedExprNode : public Object {
  public:
   Expr expr;
@@ -197,6 +151,7 @@ std::ostream& operator<<(std::ostream& os, const RealizedExpr& re) {
   return os;
 }
 
+/*! Tracks all RealizedExpr and implements manipulations on the lookup table. */
 class ScopeProjectionNode : public Object {
  public:
   Map<ObjectRef, RealizedExpr> allocs;
@@ -210,17 +165,7 @@ class ScopeProjectionNode : public Object {
 
   /*! \brief Bind previously-created RealizedExpr to a new Relax variable (e.g. alias it). */
   void Bind(RealizedExpr re, Var binding) {
-    auto it = allocs.find(binding);
-    CHECK(it == allocs.end());
-    // if (it != allocs.end()) {
-    //   // This binding overwrites an existing binding. Right now we allow this only when the existing
-    //   // binding is the output variable.
-    //   CHECK((*it).second->is_output()) << "Unable to rebind var " << RelaxScriptPrinter(false, nullptr).Print(binding).str();
-    //   allocs.Set(binding, re);
-    //   re->name_hint = binding->name_hint();
-    //   return;
-    // }
-
+    CHECK(allocs.find(binding) == allocs.end());
 
     allocs.Set(binding, re);
     if (re->name_hint.empty() && !binding->name_hint().empty()) {
@@ -257,6 +202,7 @@ std::ostream& operator<<(std::ostream& os, const ScopeProjection& proj) {
   return os;
 }
 
+/*! \brief An ExprFunctor that properly visits the whole program and returns a value from all Expr. */
 template <typename R>
 class DefaultExprFunctor : public ExprFunctor<R(const Expr& n)> {
  protected:
@@ -456,7 +402,16 @@ class DefaultExprFunctor : public ExprFunctor<R(const Expr& n)> {
   }
 };
 
-/*! \brief Discover Relax Tensors and build a set of Scope which guide TIR Stmt emission. */
+/*! \brief Discover Relax Tensors and build a set of Scope which guide TIR Stmt emission.
+ *
+ * This is the first pass of two and must be run before running AOTExecutorCodegen. Its
+ * job is to popualte ScopeProjection with a map from Relax Expr to RealizedExpr. This visitor
+ * returns
+ *
+ * WIP note: Another looming problem is what to do when an IfNode is encountered. Then we need
+ * to either consider what's returned to be an Object somehow or assert that they return the same
+ * sized Buffer so we can reuse that storage.
+ */
 class ScopeCollector : public DefaultExprFunctor<RealizedExpr> {
  public:
   ScopeCollector(ScopeProjection scope) : scope_{scope} {}
@@ -512,72 +467,6 @@ class ScopeCollector : public DefaultExprFunctor<RealizedExpr> {
   NameSupply name_supply_;
   ScopeProjection scope_;
 };
-
-
-// class ScopeWriter {
-//  public:
-
-//   ScopeWriter(std::string name, ScopeWriter* parent) : name_supply_{name}, parent_{parent} {}
-
-//   tir::Var Var(Expr relax_expr, Optional<tir::Var> opt_var = {}, Optional<String> opt_name_hint = {}) {
-//     tir::Var var;
-//     int var_index;
-//     if (opt_var.defined()) {
-//       var = opt_var.value();
-//       auto var_it = vars_.find(var);
-//       ICHECK(var_it != vars_.end()) << "Var was passed previously-defined opt_var, but it wasn't found in the VarPieces map";
-//       VarPieces& var_pieces = (*var_it).second;
-//       if (var_pieces.var->name_hint.empty() && !opt_name_hint.value_or(String("")).empty()) {
-//         tir::Var new_var(name_supply_.FreshName(opt_name_hint.value()), var_pieces.var->type_annotation);
-//         tir::Buffer new_buffer = var_pieces.buffer;
-//         if (new_buffer.defined()) {
-//           new_buffer = WithFields(new_buffer, new_var);
-//         }
-//         vars_.emplace(new_var, VarPieces{new_var, new_buffer});
-
-//         // Update Expr
-//         for (auto it = expr_var_map_.begin(); it != expr_var_map_.end(); it++) {
-//           if ((*it).second == var_pieces.var) {
-//             (*it).second = new_var;
-//           }
-//         }
-//         vars_.erase(var_it);
-//       }
-//     } else {
-//       std::string var_name{"var"};
-//       if (const VarNode* var = relax_expr.as<VarNode>()) {
-//         var_name = var->name_hint();
-//       }
-
-//       var_name = name_supply_.FreshName(var_name);
-//       VarPieces tir::Var(var_name, PointerType(PrimType(attrs->dtype), String("global")));
-
-//     }
-
-//     expr_var_map_[new_expr] = var;
-//     if (var->name_hint.empty() && !name_hint.empty()) {
-//       var->name_hint = name_hint;
-//     }
-//   }
-
-//   void DeclBuffer(tir::Var buffer_var, tir::Buffer buffer) {
-
-
-//   void Emit(tir:Stmt&& stmt) {
-//     stmts_.emplace_back(stmt);
-//   }
-
-//   void Outputs(Var relax_var) {
-
-//   }
-
-//   /*! \brief Maps Relax Expr to a tir::Var that contains the equivalent_. Tuples not handled yet. */
-//   std::unordered_map<Expr, VarPieces, ObjectPtrHash, ObjectPtrEqual> expr_var_map_;
-//   std::unordered_map<tir::Var, VarPieces> vars_;
-
-//   std::vector<tir::Stmt> stmts_;
-//   ScopeWriter* parent;
-// };
 
 
 /*! \brief Code generator for AOT executor */
@@ -679,31 +568,6 @@ class AOTExecutorCodegen : public ExprVisitor {
 
     for (auto kv : scope_->allocs) {
       // Only allocate sids that are needed
-      const bool is_iovar =
-          (std::find(io_expr_.begin(), io_expr_.end(), kv.first) != io_expr_.end());
-      const bool is_param = false; // (params_by_expr_.find(kv.first) != params_by_expr_.end());
-      if (is_iovar || is_param) {
-        continue;
-      }
-
-    //   for (unsigned int i = 0; i < kv.second->storage_ids.size(); i++) {
-    //     int size = kv.second->storage_sizes_in_bytes[i];
-    //     int sid = kv.second->storage_ids[i];
-
-    //     if (std::find(return_sid_.begin(), return_sid_.end(), sid) != return_sid_.end()) {
-    //       continue;
-    //     }
-
-    //     // Make sure it hasn't already been allocated, this can happen
-    //     // with let-bound var/value pairs.
-    //     if (allocated.find(sid) != allocated.end()) {
-    //       continue;
-    //     }
-
-    //     allocated[sid] = constant_map_.count(sids_table_[sid]);
-
-    //     // TODO(giuseros): we should allocate this once outside the PrimFunc
-    //     // so we don't pay the price of allocation for every inference
       if (allocated.find(kv.second) == allocated.end() && !kv.second->is_output()) {
         LOG(INFO) << "Create allocs for " << kv.second;
         for (unsigned int i = 0; i < kv.second->NumVars(); i++) {
@@ -712,9 +576,6 @@ class AOTExecutorCodegen : public ExprVisitor {
         }
         allocated.insert(kv.second);
       }
-    //     }
-    //     allocated[sid] = true;
-    //   }
     }
 
     for (auto kv : constant_map_) {
