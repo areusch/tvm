@@ -21,6 +21,7 @@
 
 #include <tvm/ir/transform.h>
 #include <tvm/target/compilation_config.h>
+#include <tvm/relay/runtime.h>
 
 #include <tuple>
 #include <unordered_map>
@@ -48,7 +49,7 @@ std::tuple<StorageMap, std::vector<int>> CreateStorage(const Function& func);
  * \param config The compilation config.
  * \param call_type The call type to use when calling functions.
  */
-transform::Pass AOTLowerMain(String mod_name, tvm::CompilationConfig config, CallType call_type);
+transform::Pass AOTLowerMain(String mod_name, tvm::CompilationConfig config, CallType call_type, Runtime runtime);
 
 }  // namespace aot
 }  // namespace backend

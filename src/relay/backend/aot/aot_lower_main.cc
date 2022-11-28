@@ -23,6 +23,7 @@
  */
 #include "./aot_lower_main.h"
 
+#include <tvm/relay/runtime.h>
 #include <tvm/runtime/name_transforms.h>
 #include <tvm/tir/builtin.h>
 #include <tvm/tir/transform.h>
@@ -213,8 +214,8 @@ std::tuple<StorageMap, std::vector<int>> CreateStorage(const Function& func) {
 
 class AOTMainLowerer : public MixedModeVisitor {
  public:
-  AOTMainLowerer(tvm::CompilationConfig config, CallType call_type)
-      : config_(config), call_type_(call_type) {}
+  AOTMainLowerer(tvm::CompilationConfig config, Runtime runtime, CallType call_type)
+    : config_(config), runtime_(runtime), call_type_(call_type) {}
 
   IRModule Lower(IRModule mod, String mod_name) {
     VLOG_CONTEXT << "AOT";
@@ -656,8 +657,11 @@ class AOTMainLowerer : public MixedModeVisitor {
       case CallType::kPacked: {
         // call_packed does not accept a device context.
         CHECK(!has_c_device_api_context) << "CallType::kPacked does not accept a device context";
-        func_call = tir::Evaluate(AddCheckReturn(
-            tvm::tir::Call(DataType::Int(32), tvm::tir::builtin::tvm_call_packed(), args)));
+        tir::Call call = tvm::tir::Call(DataType::Int(32), tvm::tir::builtin::tvm_call_packed(), args);
+        if (runtime_->name == "c++") {
+          call = AddCheckReturn(call);
+        }
+        func_call = tir::Evaluate(call);
         create_func_call_stmts.push_back(func_call);
         break;
       }
@@ -825,6 +829,7 @@ class AOTMainLowerer : public MixedModeVisitor {
   Map<tir::Var, tir::Buffer> main_buffer_map_;
   /*! \brief All available targets. */
   CompilationConfig config_;
+  Runtime runtime_;
   /*!
    * \brief The type of kernel call to be emitted.
    * See CallType for more documentation.
@@ -846,19 +851,19 @@ class AOTMainLowerer : public MixedModeVisitor {
   std::unordered_set<Var, ObjectPtrHash, ObjectPtrEqual> let_bound_vars_;
 };
 
-Pass AOTLowerMain(String mod_name, tvm::CompilationConfig config, CallType call_type) {
+Pass AOTLowerMain(String mod_name, tvm::CompilationConfig config, CallType call_type, Runtime runtime) {
   runtime::TypedPackedFunc<IRModule(IRModule, transform::PassContext)> pass_func =
       [=](IRModule module, transform::PassContext ctx) {
-        return AOTMainLowerer(config, call_type).Lower(module, mod_name);
+        return AOTMainLowerer(config, runtime, call_type).Lower(module, mod_name);
       };
 
   return tvm::transform::CreateModulePass(pass_func, 0, "AOTLowerMain", {"InferType"});
 }
 
 TVM_REGISTER_GLOBAL("relay.backend.aot.AOTLowerMain")
-    .set_body_typed([](const String& mod_name, const tvm::CompilationConfig& config,
+      .set_body_typed([](const String& mod_name, const tvm::CompilationConfig& config, const Runtime& runtime,
                        int call_type) {
-      return AOTLowerMain(mod_name, config, static_cast<CallType>(call_type));
+        return AOTLowerMain(mod_name, config, static_cast<CallType>(call_type), runtime);
     });
 
 }  // namespace aot

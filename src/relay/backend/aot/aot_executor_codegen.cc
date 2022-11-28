@@ -73,7 +73,7 @@ std::unordered_map<std::string, tvm::runtime::NDArray> CreateParamMap(
 }
 
 LoweredOutput Codegen(IRModule mod, String mod_name, CompilationConfig config, Executor executor,
-                      CallType call_type) {
+                      CallType call_type, Runtime runtime) {
   Integer workspace_byte_alignment =
       executor->GetAttr<Integer>("workspace-byte-alignment").value_or(16);
   Integer constant_byte_alignment =
@@ -98,7 +98,7 @@ LoweredOutput Codegen(IRModule mod, String mod_name, CompilationConfig config, E
 
   // Lower the main Relay function to a TIR PrimFunc
   // After this point the entire module is composed of PrimFuncs
-  mod = AOTLowerMain(mod_name, config, call_type)(mod);
+  mod = AOTLowerMain(mod_name, config, call_type, runtime)(mod);
 
   mod = tir::transform::ConvertForLoopsToSerial()(mod);  // TODO(mbaret) Make this optional
   bool enable_usmp = pass_ctx->GetConfig<Bool>(kUSMPEnableOption, Bool(false)).value();
@@ -145,8 +145,9 @@ class AOTExecutorCodegenModule : public runtime::ModuleNode {
         CompilationConfig config = args[3];
         Executor executor = args[4];
         Integer call_type = args[5];
+        Runtime runtime = args[6];
         this->output_ =
-            Codegen(mod, mod_name, config, executor, static_cast<CallType>(call_type->value));
+            Codegen(mod, mod_name, config, executor, static_cast<CallType>(call_type->value), runtime);
       });
     } else if (name == "list_params_name") {
       return PackedFunc(
