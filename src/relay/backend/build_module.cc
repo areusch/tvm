@@ -66,9 +66,9 @@ struct ExecutorCodegen {
   }
 
   void Codegen(IRModule mod, const Function& func, String mod_name, CompilationConfig config,
-               Executor executor, CallType call_type) {
+               Executor executor, CallType call_type, Runtime runtime) {
     CallFunc("codegen", mod, func, mod_name, config, executor,
-             Integer(static_cast<int>(call_type)));
+             Integer(static_cast<int>(call_type)), runtime);
   }
 
   virtual void UpdateOutput(BuildOutput* ret) = 0;
@@ -459,7 +459,7 @@ class RelayBuildModule : public runtime::ModuleNode {
     // Generate code for the updated function.
     executor_codegen_ = MakeExecutorCodegen(executor_->name);
     executor_codegen_->Init(nullptr, config_->primitive_targets);
-    executor_codegen_->Codegen(func_module, func, mod_name, config_, executor_, call_type_);
+    executor_codegen_->Codegen(func_module, func, mod_name, config_, executor_, call_type_, runtime_);
     executor_codegen_->UpdateOutput(&ret_);
     ret_.params = executor_codegen_->GetParams();
 
