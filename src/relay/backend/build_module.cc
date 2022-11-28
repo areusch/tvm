@@ -328,16 +328,11 @@ class RelayBuildModule : public runtime::ModuleNode {
                       << ", unpacked-api=" << unpacked_api;
       }
     } else if (runtime->name == kTvmRuntimeCpp) {
-      if (unpacked_api == false && interface_api == "packed") {
-        call_type_ = CallType::kCPacked;
-      } else {
-        CHECK(static_cast<bool>(unpacked_api) == false && interface_api == "packed")
-            << "Need unpacked-api == false (got: " << unpacked_api
-            << ") and interface-api == \"packed\" (got: " << interface_api
-            << ") when targeting c++ runtime";
-        ICHECK(false) << "Unhandled executor option config: interface-api=" << interface_api
-                      << ", unpacked-api=" << unpacked_api;
-      }
+      CHECK(static_cast<bool>(unpacked_api) == false && interface_api == "packed")
+        << "Need unpacked-api == false (got: " << unpacked_api
+        << ") and interface-api == \"packed\" (got: " << interface_api
+        << ") when targeting c++ runtime";
+      call_type_ = CallType::kPacked;
     } else {
       ICHECK(false) << "runtime (" << runtime->name << ") is not one of the expected values";
     }
