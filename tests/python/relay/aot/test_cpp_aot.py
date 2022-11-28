@@ -106,8 +106,10 @@ def test_conv2d(enable_usmp, target_kind):
             target=target_kind,
             executor=backend.Executor("aot", {"interface-api": "packed", "unpacked-api": False}),
         )
-    temp_dir = tvm.contrib.utils.TempDirectory()
+    with tvm.contrib.utils.TempDirectory.set_keep_for_debug():
+        temp_dir = tvm.contrib.utils.TempDirectory()
     test_so_path = temp_dir / "test.so"
+    print("TEST SO", test_so_path)
     mod.export_library(test_so_path, cc="gcc", options=["-std=c11", "-g3", "-O2"])
     loaded_mod = tvm.runtime.load_module(test_so_path)
     runner = tvm.runtime.executor.AotModule(loaded_mod["default"](tvm.cpu(0)))
