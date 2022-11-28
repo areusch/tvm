@@ -50,7 +50,7 @@ def test_error_c_interface():
 
 
 @pytest.mark.parametrize("enable_usmp", [True, False])
-@pytest.mark.parametrize("target_kind", ["c", "llvm"])
+@pytest.mark.parametrize("target_kind", ["c", "llvm", "cuda"])
 def test_conv2d(enable_usmp, target_kind):
     """Tests compilation of convolutions"""
     relay_model = textwrap.dedent(
@@ -108,7 +108,7 @@ def test_conv2d(enable_usmp, target_kind):
         )
     temp_dir = tvm.contrib.utils.TempDirectory()
     test_so_path = temp_dir / "test.so"
-    mod.export_library(test_so_path, cc="gcc", options=["-std=c11", "-g3", "-O0"])
+    mod.export_library(test_so_path, cc="gcc", options=["-std=c11", "-g3", "-O2"])
     loaded_mod = tvm.runtime.load_module(test_so_path)
     runner = tvm.runtime.executor.AotModule(loaded_mod["default"](tvm.cpu(0)))
     runner.set_input(**inputs)
