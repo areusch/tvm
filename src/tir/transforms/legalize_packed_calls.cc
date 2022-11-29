@@ -56,15 +56,17 @@ class PackedCallLegalizer : public StmtExprMutator {
     // let C_packed = set_struct(tvm_value3, C)
     // call_packed(f, A_packed, B_packed, C_packed)
     if (call) {
-      if (call->op.same_as(builtin::tvm_call_cpacked())) {
+      if (call->op.same_as(builtin::tvm_call_cpacked()) || call->op.same_as(builtin::tvm_call_packed())) {
         Array<PrimExpr> packed_args{call->args[0]};
-        VLOG(2) << "Legalize call:" << call;
+        VLOG(2) << "Legalize call:" << GetRef<Call>(call);
         BaseFunc base_func = mod_->Lookup(Downcast<StringImm>(call->args[0])->value);
         const PrimFuncNode* prim_func = base_func.as<PrimFuncNode>();
         VLOG(2) << " to func " << base_func;
-        for (unsigned i = 1; i < call->args.size() - 1; i++) {
+        for (unsigned i = 1; i < call->args.size(); i++) {
           // No need to pack inputs of the prim_func
+          LOG(INFO) << "Legalize " << i << ": " << call->args[i];
           if (inputs_[call->args[i]] == true) {
+            LOG(INFO) << "Input: " << i;
             packed_args.push_back(call->args[i]);
           } else {
             // Stack-allocate a DLTensor for this parameter. Note that LowerTVMBuiltin will collect
@@ -77,6 +79,7 @@ class PackedCallLegalizer : public StmtExprMutator {
               param_buf_it = prim_func->preflattened_buffer_map.find(param_var);
             }
             if (prim_func != nullptr && param_buf_it != prim_func->preflattened_buffer_map.end()) {
+              LOG(INFO) << "Found in preflattened buffer map: " << i;
               Buffer param = (*param_buf_it).second;
               PrimExpr shape = tvm::tir::Call(
                   DataType::Handle(), tvm::tir::builtin::tvm_stack_make_shape(), param->shape);
@@ -87,6 +90,7 @@ class PackedCallLegalizer : public StmtExprMutator {
               call_args.push_back(var_type /* carries dtype */);
               call_args.push_back(param->elem_offset /* elem_offset */);
             } else {
+              LOG(INFO) << "Not found: " << i;
               // When the PrimFunc cannot be found, most DLTensor information cannot be populated.
               PrimExpr shape = tvm::tir::Call(
                   DataType::Handle(), tvm::tir::builtin::tvm_stack_make_shape(), Array<PrimExpr>());
@@ -101,9 +105,11 @@ class PackedCallLegalizer : public StmtExprMutator {
                 DataType::Handle(), tvm::tir::builtin::tvm_stack_make_array(), call_args));
           }
         }
-        packed_args.push_back(call->args[call->args.size() - 1]);  // push device_context
+//        packed_args.push_back(call->args[call->args.size() - 1]);  // push device_context
         // Evaluate the packed call
-        return tir::Evaluate(tir::Call(call->dtype, call->op, packed_args));
+        auto to_return = tir::Evaluate(tir::Call(call->dtype, call->op, packed_args));
+        VLOG(2) << "Legalized: " << to_return;
+        return to_return;
       }
     }
     return StmtExprMutator::VisitStmt_(op);
