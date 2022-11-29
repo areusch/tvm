@@ -38,6 +38,7 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/GlobalVariable.h>
+#include <llvm/IR/InlineAsm.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/MDBuilder.h>
@@ -1474,6 +1475,9 @@ void CodeGenCPU::VisitStmt_(const AssertStmtNode* op) {
   builder_->CreateCondBr(cond, end_block, fail_block, md_very_likely_branch_);
   // fail condition.
   builder_->SetInsertPoint(fail_block);
+
+  llvm::InlineAsm *IA = llvm::InlineAsm::get(llvm::FunctionType::get(t_void_, {}, false),"int3","~{dirflag},~{fpsr},~{flags}",true,false,llvm::InlineAsm::AD_ATT);
+  builder_->CreateCall(IA, {});
 
 #if TVM_LLVM_VERSION >= 90
   auto err_callee =

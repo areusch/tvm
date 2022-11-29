@@ -129,11 +129,27 @@ namespace transform {
 
 Pass InstallDebugSpans() {
   auto pass_func = [](PrimFunc f, IRModule m, PassContext ctx) {
-    ICHECK(m->functions.size() == 1)
-        << "Debug info can only be added to IRModules with a single function";
+//    ICHECK(m->functions.size() == 1)
+//       << "Debug info can only be added to IRModules with a single function";
     // There is known to be only 1 function in the module at this point
-    auto entry = m->functions.begin();
-    auto name = std::get<0>(*entry)->name_hint;
+    std::string name = Downcast<String>(f->attrs->dict["global_symbol"]);
+    // for (auto it : m->functions) {
+    //   LOG(INFO) << "Fucn " << it.first << ": " << it.second;
+    //   auto it_sym = it.second->attrs->dict["global_symbol"];
+    //   ICHECK(it_sym.defined()) << "undefined symbol " << it.second;
+    //   auto it_name = Downcast<String>(it_sym);
+    //   auto sym = Downcast<String>(f->attrs->dict["global_symbol"]);
+    //   LOG(INFO) << "func (" << it_name.size() << ") " << it_name << " vs (" << sym.size() << ") " << sym;
+    //   if (it_name.compare(sym) == 0) {
+    //     name = sym;
+    //     break;
+    //   }
+    // }
+
+    LOG(INFO) << "found name " << name;
+    ICHECK(!name.empty()) << "Can't find PrimFunc in IRModule: " << f;
+//    auto entry = m->functions.begin();
+//    auto name = std::get<0>(*entry)->name_hint;
     auto* n = f.CopyOnWrite();
 
     n->body = DebugInfoInstaller::InstallInfo(std::move(name), std::move(f->body));

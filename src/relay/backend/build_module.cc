@@ -32,6 +32,7 @@
 #include <tvm/relay/transform.h>
 #include <tvm/runtime/device_api.h>
 #include <tvm/target/compilation_config.h>
+#include <tvm/tir/transform.h>
 
 #include <memory>
 
@@ -39,6 +40,7 @@
 #include "../../target/func_registry_generator.h"
 #include "../../target/metadata_module.h"
 #include "../../target/source/codegen_source_base.h"
+#include "../../tir/transforms/install_debug_spans.h"
 #include "te_compiler.h"
 #include "utils.h"
 
