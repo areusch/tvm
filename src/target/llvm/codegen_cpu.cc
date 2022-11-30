@@ -1460,6 +1460,11 @@ llvm::Value* CodeGenCPU::CreateIntrinsic(const CallNode* op) {
   }
 }
 
+void CodeGenCPU::GenerateDebugTrap() {
+  LOG(WARN) << "codegen.cpu.trap_on_assert_fail: TVM's LLVM-IR codegen for LLVM arch " << target_machine_->GetName()
+            << " does not know how to trap";
+}
+
 void CodeGenCPU::VisitStmt_(const AssertStmtNode* op) {
   EmitDebugLocation(op);
   llvm::Value* cond = MakeValue(op->condition);
@@ -1476,8 +1481,9 @@ void CodeGenCPU::VisitStmt_(const AssertStmtNode* op) {
   // fail condition.
   builder_->SetInsertPoint(fail_block);
 
-  llvm::InlineAsm *IA = llvm::InlineAsm::get(llvm::FunctionType::get(t_void_, {}, false),"int3","~{dirflag},~{fpsr},~{flags}",true,false,llvm::InlineAsm::AD_ATT);
-  builder_->CreateCall(IA, {});
+  if (PassContext::Current()->GetConfig("codegen.cpu.trap_on_assert_fail")) {
+    GenerateDebugTrap();
+  }
 
 #if TVM_LLVM_VERSION >= 90
   auto err_callee =

@@ -90,6 +90,9 @@ class CodeGenCPU : public CodeGenLLVM {
 
  protected:
   void AddStartupFunction() final;
+
+  virtual GenerateDebugTrap();
+
   // meta data
   llvm::MDNode* md_tbaa_ctx_ptr_{nullptr};
   // TVM related data types

@@ -82,6 +82,8 @@ class CodeGenX86_64 final : public CodeGenCPU {
  private:
   llvm::Value* CallVectorIntrin(llvm::Intrinsic::ID id, size_t intrin_lanes, llvm::Type* result_ty,
                                 const std::vector<llvm::Value*>& args);
+
+  void GenerateDebugTrap() final;
 };
 
 llvm::Value* CodeGenX86_64::VisitExpr_(const CastNode* op) {
@@ -160,6 +162,17 @@ llvm::Value* CodeGenX86_64::CallVectorIntrin(llvm::Intrinsic::ID id, size_t intr
     split_results.push_back(CallVectorIntrin(id, intrin_lanes, type, split_args));
   }
   return CreateVecSlice(CreateVecConcat(split_results), 0, num_elems);
+}
+
+void CodeGenX86_64::GenerateDebugTrap() {
+  llvm::InlineAsm *IA = llvm::InlineAsm::get(
+    llvm::FunctionType::get(t_void_, {}, false),
+    "int 3",
+    "~{dirflag},~{fpsr},~{flags}",
+    true,
+    false,
+    llvm::InlineAsm::AD_ATT);
+  builder_->CreateCall(IA, {});
 }
 
 TVM_REGISTER_GLOBAL("tvm.codegen.llvm.target_x86-64")
