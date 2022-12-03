@@ -118,7 +118,7 @@ class CUDADeviceAPI final : public DeviceAPI {
       CUDA_CALL(cudaSetDevice(dev.device_id));
       size_t free_mem, total_mem;
       CUDA_CALL(cudaMemGetInfo(&free_mem, &total_mem));
-      VLOG(1) << "allocating " << nbytes << " bytes on device, with " << free_mem
+      VLOG(1) << "allocating " << nbytes << " bytes on device " << dev.device_id << ", with " << free_mem
               << " bytes currently free out of " << total_mem << " bytes available";
       CUDA_CALL(cudaMalloc(&ret, nbytes));
     }
@@ -140,6 +140,7 @@ class CUDADeviceAPI final : public DeviceAPI {
   void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset, size_t size,
                       Device dev_from, Device dev_to, DLDataType type_hint,
                       TVMStreamHandle stream) final {
+    LOG(INFO) << "CUDA CopyDataFromTo (" << size << ") " << from << " (" << dev_from << ") -> " << to << " (" << dev_to << ")";
     cudaStream_t cu_stream = static_cast<cudaStream_t>(stream);
     from = static_cast<const char*>(from) + from_offset;
     to = static_cast<char*>(to) + to_offset;

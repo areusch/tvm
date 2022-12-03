@@ -141,6 +141,7 @@ runtime::Module BuildCUDA(IRModule mod, Target target) {
   }
 
   std::string code = cg.Finish();
+  LOG(INFO) << "CUDA: " << code;
 
   if (const auto* f = Registry::Get("tvm_callback_cuda_postproc")) {
     code = (*f)(code).operator std::string();

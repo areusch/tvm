@@ -166,6 +166,8 @@ class CUDAWrappedFunc {
     CUDA_CALL(cudaGetDevice(&device_id));
     ThreadWorkLoad wl = launch_param_config_.Extract(args);
 
+    LOG(INFO) << "CUDA Wrapped " << func_name_ << ": Invoke (" << args.size() << ")";
+
     if (fcache_[device_id] == nullptr) {
       fcache_[device_id] = m_->GetFunc(device_id, func_name_);
       if (wl.dyn_shmem_size >= (48 << 10)) {

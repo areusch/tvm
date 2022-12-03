@@ -56,6 +56,8 @@ runtime::Module Build(IRModule mod, Target target) {
   std::string build_f_name = "target.build." + target->kind->name;
   const PackedFunc* bf = runtime::Registry::Get(build_f_name);
   ICHECK(bf != nullptr) << build_f_name << " is not enabled";
+  VLOG_CONTEXT << "Codegen";
+  VLOG(2) << "Build (" << target << "): " << mod;
   return (*bf)(mod, target);
 }
 
