@@ -413,6 +413,18 @@ class AOTMainLowerer : public MixedModeVisitor {
   }
 
  private:
+  int64_t GetRuntimeDeviceIndex(VirtualDevice dev) {
+    auto it = std::find(runtime_device_indexes_.begin(), runtime_device_indexes_.end(), dev);
+    int64_t to_return;
+    if (it != runtime_device_indexes_.end()) {
+      to_return = it - runtime_device_indexes_.begin();
+    } else {
+      to_return = runtime_device_indexes_.size();
+      runtime_device_indexes_.emplace_back(dev);
+    }
+    return to_return;
+  }
+
   /*!
    * \brief Create the main PrimFunc to execute the graph.
    * \note The packed function calls don't pack their arguments. The AOT
@@ -422,7 +434,7 @@ class AOTMainLowerer : public MixedModeVisitor {
     tir::Stmt body = tir::SeqStmt(stmts_);
     // Allocate the sids
     std::unordered_map<int, bool> allocated;
-    std::vector<std::pair<int64_t, int64_t>> sids_to_allocate;
+    std::vector<std::tuple<int64_t, VirtualDevice, int64_t>> sids_to_allocate;
 
     for (auto kv : expr_storage_map_) {
       // Only allocate sids that are needed
@@ -434,7 +446,7 @@ class AOTMainLowerer : public MixedModeVisitor {
 
       for (unsigned int i = 0; i < kv.second->storage_ids.size(); i++) {
         sids_to_allocate.push_back(
-            std::make_pair(kv.second->storage_ids[i], kv.second->storage_sizes_in_bytes[i]));
+            std::make_tuple(kv.second->storage_ids[i], kv.second->virtual_devices[i], kv.second->storage_sizes_in_bytes[i]));
       }
     }
 
@@ -442,8 +454,9 @@ class AOTMainLowerer : public MixedModeVisitor {
     std::sort(sids_to_allocate.begin(), sids_to_allocate.end());
 
     for (auto p : sids_to_allocate) {
-      int sid = p.first;
-      int size = p.second;
+      int sid = std::get<0>(p);
+      VirtualDevice dev = std::get<1>(p);
+      int size = std::get<2>(p);
 
       if (std::find(return_sid_.begin(), return_sid_.end(), sid) != return_sid_.end()) {
         continue;
@@ -462,7 +475,25 @@ class AOTMainLowerer : public MixedModeVisitor {
       if (!allocated[sid]) {
         PointerType ptype = Downcast<PointerType>(sids_table_[sid]->type_annotation);
         DataType element_type = Downcast<PrimType>(ptype->element_type)->dtype;
-        body = tir::Allocate(sids_table_[sid], element_type, {size}, tir::const_true(), body);
+        ICHECK_EQ(element_type.bits(), 8);
+        auto alloc_op = tir::Call(DataType::Handle(),
+                                  tir::builtin::tvm_call_packed(),
+                                  {tir::StringImm("tvm.runtime.aot.call_device_api"),
+                                   IntImm(DataType::Int(64), GetRuntimeDeviceIndex(dev)),
+                                   IntImm(DataType::Int(64), tvm::runtime::DeviceAPI::VTable::kAllocDataSpace),
+                                   IntImm(DataType::Int(64), size),
+                                   IntImm(DataType::Int(64), 128),
+                                   IntImm(DataType::Int(64), element_type.code()),
+                                   IntImm(DataType::Int(64), element_type.bits()),
+                                   IntImm(DataType::Int(64), element_type.lanes())});
+        auto free_op = tir::Evaluate(tir::Call(DataType::Int(32),
+                                                          tir::builtin::tvm_call_packed(),
+                                                          {tir::StringImm("tvm.runtime.aot.call_device_api"),
+                                                           IntImm(DataType::Int(64), GetRuntimeDeviceIndex(dev)),
+                                                           IntImm(DataType::Int(64), tvm::runtime::DeviceAPI::VTable::kFreeDataSpace),
+                                                           sids_table_[sid]}));
+        body = tir::LetStmt(sids_table_[sid], alloc_op,
+                            tir::SeqStmt({body, free_op}));
       }
       allocated[sid] = true;
     }
@@ -821,6 +852,8 @@ class AOTMainLowerer : public MixedModeVisitor {
   std::vector<Var> input_vars_;
   /*! \brief map of device contexts variables */
   Map<String, tir::Var> devices_;
+  /*! \brief List of VirtualDevice in order expected in the executor. */
+  std::vector<VirtualDevice> runtime_device_indexes_;
   /*! \brief map of GlobalVars to C Device API contexts */
   Map<GlobalVar, tir::Var> device_contexts_;
   /*! \brief input and output variables belonging to the main function signature */
