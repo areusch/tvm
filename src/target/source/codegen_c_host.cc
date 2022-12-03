@@ -205,7 +205,7 @@ void CodeGenCHost::PrintGetFuncFromBackend(const std::string& func_name,
   this->stream << "}\n";
 }
 
-void CodeGenCHost::PrintFuncCall(const std::string& packed_func_name, int num_args) {
+std::string CodeGenCHost::PrintFuncCall(const std::string& packed_func_name, int num_args, DataType ret_val_type) {
   this->PrintIndent();
   std::string ret_val = name_supply_->FreshName("ret_val");
   std::string ret_type_code = name_supply_->FreshName("ret_type_code");
@@ -226,10 +226,23 @@ void CodeGenCHost::PrintFuncCall(const std::string& packed_func_name, int num_ar
   this->EndScope(func_call_scope);
   this->PrintIndent();
   this->stream << "}\n";
+
+  std::stringstream rv;
+  rv << ret_val << ".";
+  if (ret_val_type.is_handle()) {
+    rv << "v_handle";
+  } else if (ret_val_type.is_float()) {
+    rv << "v_float64";
+  } else if (ret_val_type.is_int()) {
+    rv << "v_int64";
+  } else {
+    LOG(FATAL) << "Do not know how to handle type" << ret_val_type;
+  }
+  return rv.str();
 }
 
-void CodeGenCHost::PrintFuncCallC(const std::string& packed_func_name, int num_args,
-                                  const std::string& resource_handle_name) {
+std::string CodeGenCHost::PrintFuncCallC(const std::string& packed_func_name, int num_args,
+                                    const std::string& resource_handle_name) {
   this->PrintIndent();
   std::string ret_val = name_supply_->FreshName("ret_val");
   std::string ret_type_code = name_supply_->FreshName("ret_type_code");
@@ -252,6 +265,10 @@ void CodeGenCHost::PrintFuncCallC(const std::string& packed_func_name, int num_a
   this->EndScope(func_call_scope);
   this->PrintIndent();
   this->stream << "}\n";
+
+  std::stringstream rv;
+  rv << ret_val << "[0]";
+  return rv.str();
 }
 
 std::string CodeGenCHost::GetPackedName(const CallNode* op) {
@@ -335,7 +352,7 @@ void CodeGenCHost::VisitExpr_(const CallNode* op, std::ostream& os) {  // NOLINT
     auto function_info = GetFunctionInfo(op, false /* has_resource_handle */);
     std::string func_name_packed = GetPackedName(op);
     this->PrintGetFuncFromBackend(function_info.func_name, func_name_packed);
-    this->PrintFuncCall(func_name_packed, function_info.num_args);
+    os << this->PrintFuncCall(func_name_packed, function_info.num_args, op->dtype);
   } else if (op->op.same_as(builtin::tvm_call_cpacked_lowered())) {
     auto function_info = GetFunctionInfo(op, true /* has_resource_handle */);
     this->PrintFuncCallC(function_info.func_name, function_info.num_args,

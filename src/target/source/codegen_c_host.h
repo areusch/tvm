@@ -91,9 +91,9 @@ class CodeGenCHost : public CodeGenC {
   FunctionInfo GetFunctionInfo(const CallNode* op, bool has_resource_handle);
   std::string GetPackedName(const CallNode* op);
   void PrintGetFuncFromBackend(const std::string& func_name, const std::string& packed_func_name);
-  void PrintFuncCall(const std::string& packed_func_name, int num_args);
-  void PrintFuncCallC(const std::string& packed_func_name, int num_args,
-                      const std::string& resource_handle_name);
+  std::string PrintFuncCall(const std::string& packed_func_name, int num_args, DataType ret_val_type);
+  std::string PrintFuncCallC(const std::string& packed_func_name, int num_args,
+                             const std::string& resource_handle_name);
 
   /*!
    * \brief Print ternary conditional operator implementing binary `op`
