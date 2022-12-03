@@ -25,6 +25,7 @@
 
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InlineAsm.h>
 #include <llvm/IR/Intrinsics.h>
 #if TVM_LLVM_VERSION >= 100
 #include <llvm/IR/IntrinsicsX86.h>
@@ -167,7 +168,7 @@ llvm::Value* CodeGenX86_64::CallVectorIntrin(llvm::Intrinsic::ID id, size_t intr
 void CodeGenX86_64::GenerateDebugTrap() {
   llvm::InlineAsm *IA = llvm::InlineAsm::get(
     llvm::FunctionType::get(t_void_, {}, false),
-    "int 3",
+    "int3",
     "~{dirflag},~{fpsr},~{flags}",
     true,
     false,

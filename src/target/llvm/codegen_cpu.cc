@@ -38,7 +38,6 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/GlobalVariable.h>
-#include <llvm/IR/InlineAsm.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/MDBuilder.h>
@@ -50,6 +49,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <tvm/ir/transform.h>
 #include <tvm/runtime/c_runtime_api.h>
 #include <tvm/runtime/module.h>
 #include <tvm/tir/analysis.h>
@@ -1461,8 +1461,8 @@ llvm::Value* CodeGenCPU::CreateIntrinsic(const CallNode* op) {
 }
 
 void CodeGenCPU::GenerateDebugTrap() {
-  LOG(WARN) << "codegen.cpu.trap_on_assert_fail: TVM's LLVM-IR codegen for LLVM arch " << target_machine_->GetName()
-            << " does not know how to trap";
+  LOG(WARNING) << "codegen.cpu.trap_on_assert_fail: TVM's LLVM-IR codegen for target " << llvm_target_->str()
+               << " does not know how to trap";
 }
 
 void CodeGenCPU::VisitStmt_(const AssertStmtNode* op) {
@@ -1481,7 +1481,7 @@ void CodeGenCPU::VisitStmt_(const AssertStmtNode* op) {
   // fail condition.
   builder_->SetInsertPoint(fail_block);
 
-  if (PassContext::Current()->GetConfig("codegen.cpu.trap_on_assert_fail")) {
+  if (tvm::transform::PassContext::Current()->GetConfig("codegen.cpu.trap_on_assert_fail", Bool(false))) {
     GenerateDebugTrap();
   }
 

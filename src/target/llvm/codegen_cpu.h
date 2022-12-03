@@ -91,7 +91,7 @@ class CodeGenCPU : public CodeGenLLVM {
  protected:
   void AddStartupFunction() final;
 
-  virtual GenerateDebugTrap();
+  virtual void GenerateDebugTrap();
 
   // meta data
   llvm::MDNode* md_tbaa_ctx_ptr_{nullptr};
