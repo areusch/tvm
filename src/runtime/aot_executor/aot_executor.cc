@@ -55,20 +55,22 @@ AotExecutor::AotExecutor(tvm::runtime::Module module, const std::vector<Device>&
   auto ret_value = fmetadata();
   metadata_ = ret_value.AsObjectRef<tvm::runtime::metadata::Metadata>();
 
-  ICHECK_EQ(devices_.size(), 1) << "Expect exactly 1 device passed.";
-  DLDevice expected_device{kDLCPU, 0};
-  ICHECK_EQ(devices_[0].device_id, expected_device.device_id)
-      << "At this time, AOTExecutor supports only execution on kDLCPU 0";
+//  ICHECK_EQ(devices_.size(), 1) << "Expect exactly 1 device passed.";
+//  DLDevice expected_device{kDLCPU, 0};
+//  ICHECK_EQ(devices_[0].device_id, expected_device.device_id)
+//      << "At this time, AOTExecutor supports only execution on kDLCPU 0";
   // TODO(tvm-team): Temporary hack since Hexagon is defined different than kDLCPU.
-  bool is_valid_device =
-      (devices_[0].device_type == kDLHexagon) || (devices_[0].device_type == kDLCPU);
-  CHECK(is_valid_device)
-      << "At this time, AOTExecutor supports only execution on kDLCPU 0 or kDLHexagon 0";
+//  bool is_valid_device =
+//      (devices_[0].device_type == kDLHexagon) || (devices_[0].device_type == kDLCPU);
+//  CHECK(is_valid_device)
+//      << "At this time, AOTExecutor supports only execution on kDLCPU 0 or kDLHexagon 0";
 
   for (auto input : metadata_->inputs()) {
     // TODO(areusch): Encode device information in Metadata.
     args_.emplace_back(NDArray::Empty(ShapeTuple(input->shape().begin(), input->shape().end()),
                                       input->dtype(), devices_[0]));
+    auto& arg = args_[args_.size() - 1];;
+    LOG(INFO) << "Input arg " << arg->shape << " (" << arg->device;
   }
 
   for (auto output : metadata_->outputs()) {
