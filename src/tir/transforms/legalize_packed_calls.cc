@@ -59,6 +59,10 @@ class PackedCallLegalizer : public StmtExprMutator {
       if (call->op.same_as(builtin::tvm_call_cpacked()) || call->op.same_as(builtin::tvm_call_packed())) {
         Array<PrimExpr> packed_args{call->args[0]};
         VLOG(2) << "Legalize call:" << GetRef<Call>(call);
+        if (!mod_->ContainGlobalVar(Downcast<StringImm>(call->args[0])->value)) {
+          VLOG(2) << "function not found";
+          return StmtExprMutator::VisitStmt_(op);
+        }
         BaseFunc base_func = mod_->Lookup(Downcast<StringImm>(call->args[0])->value);
         const PrimFuncNode* prim_func = base_func.as<PrimFuncNode>();
         VLOG(2) << " to func " << base_func;
