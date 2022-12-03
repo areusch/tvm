@@ -41,7 +41,7 @@
 macro(find_cuda use_cuda use_cudnn)
   set(__use_cuda ${use_cuda})
   if(${__use_cuda} MATCHES ${IS_TRUE_PATTERN})
-    find_package(CUDA QUIET)
+    find_package(CUDA)
   elseif(IS_DIRECTORY ${__use_cuda})
     set(CUDA_TOOLKIT_ROOT_DIR ${__use_cuda})
     message(STATUS "Custom CUDA_PATH=" ${CUDA_TOOLKIT_ROOT_DIR})
@@ -81,28 +81,28 @@ macro(find_cuda use_cuda use_cudnn)
       if(_CUDA_CUDA_LIBRARY)
         set(CUDA_CUDA_LIBRARY ${_CUDA_CUDA_LIBRARY})
       endif()
-      find_library(CUDA_NVRTC_LIBRARY nvrtc
+      find_library(CUDA_NVRTC_LIBRARY nvrtc 11.5
         PATHS ${CUDA_TOOLKIT_ROOT_DIR}
         PATH_SUFFIXES lib lib64 targets/x86_64-linux/lib targets/x86_64-linux/lib/stubs lib64/stubs lib/x86_64-linux-gnu
         NO_DEFAULT_PATH)
-      find_library(CUDA_CURAND_LIBRARY curand
+      find_library(CUDA_CURAND_LIBRARY curand 11.5
         ${CUDA_TOOLKIT_ROOT_DIR}/lib64
         ${CUDA_TOOLKIT_ROOT_DIR}/lib
         NO_DEFAULT_PATH)
-      find_library(CUDA_CUBLAS_LIBRARY cublas
+      find_library(CUDA_CUBLAS_LIBRARY cublas 11.5
         ${CUDA_TOOLKIT_ROOT_DIR}/lib64
         ${CUDA_TOOLKIT_ROOT_DIR}/lib
         NO_DEFAULT_PATH)
       # search default path if cannot find cublas in non-default
-      find_library(CUDA_CUBLAS_LIBRARY cublas)
-      find_library(CUDA_CUBLASLT_LIBRARY
+      find_library(CUDA_CUBLAS_LIBRARY cublas 11.5)
+      find_library(CUDA_CUBLASLT_LIBRARY 11.5
         NAMES cublaslt cublasLt
         PATHS
         ${CUDA_TOOLKIT_ROOT_DIR}/lib64
         ${CUDA_TOOLKIT_ROOT_DIR}/lib
         NO_DEFAULT_PATH)
       # search default path if cannot find cublaslt in non-default
-      find_library(CUDA_CUBLASLT_LIBRARY NAMES cublaslt cublasLt)
+      find_library(CUDA_CUBLASLT_LIBRARY 11.5 NAMES cublaslt cublasLt)
     endif(MSVC)
 
     # find cuDNN
