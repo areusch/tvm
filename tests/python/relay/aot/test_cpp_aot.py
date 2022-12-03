@@ -56,7 +56,7 @@ def test_conv2d(enable_usmp, target_kind):
     relay_model = textwrap.dedent(
         """\
         #[version = "0.0.5"]
-        def @main(%data : Tensor[(1, 3, 64, 64), uint8], %weight : Tensor[(3, 3, 5, 5), int8]) {
+        def @main(%data : Tensor[(1, 3, 64, 64), int8], %weight : Tensor[(3, 3, 5, 5), int8]) {
             %1 = nn.conv2d(
                  %data,
                  %weight,
@@ -66,6 +66,11 @@ def test_conv2d(enable_usmp, target_kind):
                  data_layout="NCHW",
                  kernel_layout="OIHW",
                  out_dtype="int32");
+            %1
+        }
+    """
+    )
+    """
             %2 = cast(nn.max_pool2d(%1, pool_size=[3, 3]), dtype="int8");
             %3 = nn.conv2d(
                  %2,
@@ -77,17 +82,68 @@ def test_conv2d(enable_usmp, target_kind):
                  kernel_layout="OIHW",
                  out_dtype="int32");
             %4 = nn.max_pool2d(%3, pool_size=[3, 3]);
-            %4
-        }
     """
-    )
     ir_mod = tvm.parser.fromtext(relay_model)
 
     main_func = ir_mod["main"]
     shape_dict = {p.name_hint: p.checked_type.concrete_shape for p in main_func.params}
     type_dict = {p.name_hint: p.checked_type.dtype for p in main_func.params}
+#    weight_data = np.random.randint(1, 255, shape_dict["weight"]).astype(type_dict["weight"])
+    weight_data = np.array(
+        [[[[ -25,  -7, -46,   6,-119],
+           [  92,  28, -14,  53,  32],
+           [  40,  42,-128,  74,   2],
+           [-110, -94,  38,  73,   2],
+           [  83,  41,  89,-104,-109]],
 
-    weight_data = np.random.randint(1, 255, shape_dict["weight"]).astype(type_dict["weight"])
+          [[  30,-107,-112,  90, 114],
+           [  10,  52, 100, -88,  -8],
+           [  99,-124,  37,  50,  79],
+           [ -61,  -9, -42, -89,   2],
+           [ -45, -53, -73,   1,  44]],
+
+          [[-106,  59,   6,-118, -63],
+           [  10,  -8,  69,  22, -32],
+           [  84, -50, 101,  44,  15],
+           [  57, -31, 117,  77,-124],
+           [  89,  60, -49, -70,-108]]],
+
+         [[[  64, -23,   2,-103, -98],
+           [  -3, 122,-100, -17, -99],
+           [ -31,  23, 116, -14, 109],
+           [-123, 104,  16,  74,-121],
+           [  29,   1, -62,  70, 125]],
+
+          [[-105, -18,  95,  63,-117],
+           [ 121, -83,-114, -24, -40],
+           [  41,  47,  44,  68, -17],
+           [ -19,  28,  24,-107,-108],
+           [ -90, -32, -19,  50, 120]],
+
+          [[ -71,  -4,  88,-101,-117],
+           [ 108,  82,  70, 118,  85],
+           [ 110, 124, 118, -61, -41],
+           [  74,  36, -72,  31,  -3],
+           [ 125,-112,  87,  53,  70]]],
+
+         [[[   6,-114, -14,  40, -97],
+           [-127,  13,   3,  43,-116],
+           [ -43,-128,-121,-114,  79],
+           [ -99, -17,  94,-107,  20],
+           [ 106,  87, -93, 116, 104]],
+
+          [[  45, 109, -51, -54,  45],
+           [  44,  89,  45, -69, 100],
+           [  95,  16, -46,  -6,-110],
+           [  26, -52, 104,   2, -96],
+           [ -53, -41,  63,  59,  17]],
+
+          [[  93, -10,   5,  31,  50],
+           [ -16, -32,  62,  98,-105],
+           [-111, -72, -90, -58,  50],
+           [  24, -38, -18, -46,  82],
+           [ -58, -52, -17,-118,  52]]]], dtype=type_dict["data"])
+    print("WEIGHT", weight_data)
     input_data = np.ones(shape_dict["data"]).astype(type_dict["data"])
     params = {"weight": weight_data}
     inputs = {"data": input_data}
@@ -98,23 +154,30 @@ def test_conv2d(enable_usmp, target_kind):
         config={
             "tir.disable_vectorize": True,
             "tir.usmp.enable": enable_usmp,
+            "tir.enable_debug": True,
         },
     ):
         mod = tvm.relay.build(
             ir_mod,
             params=params,
-            target=target_kind,
+            target=target_kind + " -host=c",
+#            executor=backend.Executor("graph"),
             executor=backend.Executor("aot", {"interface-api": "packed", "unpacked-api": False}),
         )
     with tvm.contrib.utils.TempDirectory.set_keep_for_debug():
         temp_dir = tvm.contrib.utils.TempDirectory()
     test_so_path = temp_dir / "test.so"
     print("TEST SO", test_so_path)
+    mod.export_library(str(test_so_path)[:-3] + ".tar")
+#    with open("graph.json", "w") as f:
+#        f.write(mod.get_graph_json())
     mod.export_library(test_so_path, cc="gcc", options=["-std=c11", "-g3", "-O2"])
-    loaded_mod = tvm.runtime.load_module(test_so_path)
-    runner = tvm.runtime.executor.AotModule(loaded_mod["default"](tvm.cpu(0)))
+    loaded_mod = tvm.runtime.load_module("patched-lib.tar") #test_so_path)
+    runner = tvm.runtime.executor.AotModule(loaded_mod["default"](tvm.gpu(0), tvm.cpu(0)))
+#    runner = tvm.contrib.graph_executor.GraphModule(loaded_mod["default"](tvm.gpu(0), tvm.cpu(0)))
     runner.set_input(**inputs)
     runner.run()
+    print("OUTPUT", runner.get_output(0).numpy())
     assert (runner.get_output(0).numpy() == list(ref_outputs.values())[0]).all()
 
 
