@@ -138,9 +138,53 @@ TVM_DLL int32_t tvmgen_default_fused_nn_conv2d(void* args, int32_t* arg_type_ids
     return -1;
   }
   ret_val_1.v_int64;
+
+
+  void* fused_constant_0_on_device = TVMBackendAllocWorkspace(2, dev_id, (uint64_t)sizeof(fused_constant_0), 0, 8);
+  if (packed_kernel == NULL) {
+    return -1;
+  }
+
+  DLTensor fused_constant_0_cpu_tensor;
+  int64_t fused_constant_0_cpu_tensor_shape = 400;
+  fused_constant_0_cpu_tensor.data = (void*) fused_constant_0;
+  fused_constant_0_cpu_tensor.device = DLDevice{kDLCPU, 0};
+  fused_constant_0_cpu_tensor.ndim = 1;
+  fused_constant_0_cpu_tensor.dtype = DLDataType{kDLInt, 8, 1};
+  fused_constant_0_cpu_tensor.shape = &fused_constant_0_cpu_tensor_shape;
+  fused_constant_0_cpu_tensor.strides = NULL;
+  fused_constant_0_cpu_tensor.byte_offset = 0;
+
+  DLTensor fused_constant_0_gpu_tensor;
+  int64_t fused_constant_0_gpu_tensor_shape = 400;
+  fused_constant_0_gpu_tensor.data = fused_constant_0_on_device;
+  fused_constant_0_gpu_tensor.device = DLDevice{kDLCUDA, dev_id};
+  fused_constant_0_gpu_tensor.ndim = 1;
+  fused_constant_0_gpu_tensor.dtype = DLDataType{kDLInt, 8, 1};
+  fused_constant_0_gpu_tensor.shape = &fused_constant_0_gpu_tensor_shape;
+  fused_constant_0_gpu_tensor.strides = NULL;
+  fused_constant_0_gpu_tensor.byte_offset = 0;
+
+  (((TVMValue*)stack_value)[0].v_int64) = (int64_t)0;
+  ((int32_t*)stack_tcode)[0] = 0;
+  (((TVMValue*)stack_value)[1].v_int64) = (int64_t)2;
+  ((int32_t*)stack_tcode)[1] = 0;
+  (((TVMValue*)stack_value)[2].v_int64) = (int64_t)&fused_constant_0_cpu_tensor;
+  ((int32_t*)stack_tcode)[2] = 7;
+  (((TVMValue*)stack_value)[3].v_int64) = (int64_t)&fused_constant_0_gpu_tensor;
+  ((int32_t*)stack_tcode)[3] = 7;
+  if (tvm_runtime_aot_call_device_api_packed == NULL) {
+    if (TVMBackendGetFuncFromEnv(__tvm_module_ctx, "tvm.runtime.aot.call_device_api", &tvm_runtime_aot_call_device_api_packed) != 0) {
+      return -1;
+    }
+  }
+  if (TVMFuncCall(tvm_runtime_aot_call_device_api_packed, (TVMValue*) stack_value, (int*) stack_tcode, 4, &ret_val, &ret_type_code) != 0) {
+    return -1;
+  }
+
   (((TVMValue*)stack_value)[0].v_handle) = packed_kernel;
   ((int32_t*)stack_tcode)[0] = 3;
-  (((TVMValue*)stack_value)[1].v_handle) = fused_constant_0;
+  (((TVMValue*)stack_value)[1].v_handle) = fused_constant_0_on_device;
   ((int32_t*)stack_tcode)[1] = 3;
   (((TVMValue*)stack_value)[2].v_int64) = ((int64_t)1);
   ((int32_t*)stack_tcode)[2] = 0;
