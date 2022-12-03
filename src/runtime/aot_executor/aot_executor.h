@@ -127,6 +127,8 @@ class TVM_DLL AotExecutor : public ModuleNode {
    */
   void CopyOutputTo(int index, DLTensor* data_out);
 
+  void CallDeviceAPI(TVMArgs args, TVMRetValue* rv);
+
  private:
   /*! \brief Metadata provided to the runtime from the compiler. */
   metadata::Metadata metadata_;

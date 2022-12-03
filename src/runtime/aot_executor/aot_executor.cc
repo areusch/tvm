@@ -26,16 +26,27 @@
 #include "aot_executor.h"
 
 #include <tvm/runtime/c_runtime_api.h>
+#include <tvm/runtime/device_api.h>
 #include <tvm/runtime/data_type.h>
 #include <tvm/runtime/name_transforms.h>
+#include <tvm/runtime/registry.h>
 
 #include <limits>
 #include <memory>
 
 #include "../meta_data.h"
 
+
 namespace tvm {
 namespace runtime {
+
+namespace {
+AotExecutor* active_executor_ = nullptr;
+AotExecutor* GetActiveExecutor() {
+  return active_executor_;
+}
+}
+
 
 AotExecutor::AotExecutor(tvm::runtime::Module module, const std::vector<Device>& devs)
     : module_{module}, devices_{devs} {
@@ -178,7 +189,25 @@ void AotExecutor::Run() {
 
   TVMArgs args{call_values.get(), call_type_codes.get(), num_args};
   TVMRetValue rv;
-  pf.CallPacked(args, &rv);
+  // TODO multithreading loool.
+  ICHECK(active_executor_ == nullptr) << "Only one AOTExecutor should be null at a time";
+  active_executor_ = this;
+  try {
+    pf.CallPacked(args, &rv);
+  } catch (std::exception& e) {
+    ICHECK_EQ(active_executor_, this) << "active_executor_ should be the same as before entering module";
+    active_executor_ = nullptr;
+    throw;
+  }
+
+  ICHECK_EQ(active_executor_, this) << "active_executor_ should be the same as before entering module";
+  active_executor_ = nullptr;
+}
+
+void AotExecutor::CallDeviceAPI(TVMArgs args, TVMRetValue* rv) {
+  int64_t runtime_device_index = args[0].operator int64_t();
+  ICHECK(runtime_device_index >= 0 && static_cast<uint64_t>(runtime_device_index) < devices_.size()) << "call_device_api: runtime_device_index out of range: " << runtime_device_index;
+  DeviceAPI::Get(devices_[runtime_device_index])->Dispatch(devices_[runtime_device_index], args, rv);
 }
 
 int AotExecutor::GetInputIndex(const std::string& name) {
@@ -220,6 +249,13 @@ NDArray AotExecutor::GetInput(int index) const { return args_[index]; }
 NDArray AotExecutor::GetOutput(int index) const { return args_[metadata_->num_inputs() + index]; }
 
 void AotExecutor::CopyOutputTo(int index, DLTensor* data_out) { GetOutput(index).CopyTo(data_out); }
+
+TVM_REGISTER_GLOBAL("tvm.runtime.aot.call_device_api").set_body(
+  [](TVMArgs args, TVMRetValue* rv) {
+    auto executor = GetActiveExecutor();
+    ICHECK_NOTNULL(executor);
+    executor->CallDeviceAPI(args, rv);
+  });
 
 }  // namespace runtime
 }  // namespace tvm

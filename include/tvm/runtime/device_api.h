@@ -70,6 +70,12 @@ constexpr int kDefaultWorkspaceAlignment = 1;
  */
 class TVM_DLL DeviceAPI {
  public:
+  enum VTable {
+    kAllocDataSpace = 0,
+    kFreeDataSpace = 1,
+    kCopyDataFromTo = 2,
+  };
+
   /*! \brief virtual destructor */
   virtual ~DeviceAPI() {}
   /*!
@@ -93,6 +99,8 @@ class TVM_DLL DeviceAPI {
    * all properties that can be determined from that device.
    */
   virtual void GetTargetProperty(Device dev, const std::string& property, TVMRetValue* rv) {}
+
+  void Dispatch(Device dev, TVMArgs args, TVMRetValue* rv);
 
   /*!
    * \brief Allocate a data space on device.
@@ -333,6 +341,40 @@ inline Device AddRPCSessionMask(Device dev, int session_table_index) {
   dev.device_type =
       static_cast<DLDeviceType>(dev.device_type | (kRPCSessMask * (session_table_index + 1)));
   return dev;
+}
+
+inline void DeviceAPI::Dispatch(Device dev, TVMArgs args, TVMRetValue* rv) {
+  int64_t func_index = args[1]; // TODO TVMArgs doesn't curry? weird...
+  LOG(INFO) << "Dispatch funcindex" << func_index << " with " << args.size();
+  switch(func_index) {
+  case VTable::kAllocDataSpace:
+  {
+    DataType dtype = DataType(args[4], args[5], args[6]);
+    *rv = AllocDataSpace(dev,
+                         static_cast<size_t>(args[2].operator int64_t()),
+                         static_cast<size_t>(args[3].operator int64_t()),
+                         dtype);
+    LOG(INFO) << "VTable Dispatch: AllocDataSpace("
+              << dev << ", "
+              << static_cast<size_t>(args[2].operator int64_t()) << ", "
+              << static_cast<size_t>(args[3].operator int64_t()) << ", "
+              << dtype
+              << ") = " << rv->operator void*();
+    break;
+  }
+  case VTable::kFreeDataSpace:
+    LOG(INFO) << "VTable Dispatch: FreeDataSpace(" << dev << ", "<< args[2].operator void*() << ")";
+    FreeDataSpace(dev, args[2].operator void*());
+    break;
+  case VTable::kCopyDataFromTo:
+    LOG(INFO) << "VTable Dispatch: CopyDataFromTo(" << dev << ", "<< args[2].operator void*() << ", " << args[3].operator void*() << ")";
+    CopyDataFromTo(static_cast<DLTensor*>(args[2].operator void*()), static_cast<DLTensor*>(args[3].operator void*()), nullptr);
+    StreamSync(dev, nullptr);
+    break;
+  default:
+    ICHECK(false) << "DeviceAPI::Dispatch: unexpected VTable index: " << func_index;
+    break;
+  }
 }
 
 }  // namespace runtime
