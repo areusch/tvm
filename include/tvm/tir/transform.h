@@ -729,6 +729,12 @@ TVM_DLL Pass InstrumentProfileIntrinsics();
  */
 TVM_DLL Pass DefaultGPUSchedule();
 
+/*!
+ * \brief Mangle TIR function names by appending a prefix to avoid symbol collisions.
+ * \return The pass.
+ */
+TVM_DLL Pass TIRFuncRename();
+
 }  // namespace transform
 }  // namespace tir
 }  // namespace tvm

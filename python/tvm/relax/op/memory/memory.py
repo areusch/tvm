@@ -58,6 +58,12 @@ def alloc_storage(
     if isinstance(virtual_device_index, int):
         virtual_device_index = PrimValue(virtual_device_index)
     return _ffi_api.alloc_storage(size, virtual_device_index, storage_scope, dtype)  # type: ignore
+    # if not isinstance(size, ShapeExpr):
+    #     if not isinstance(size, (tuple, list)):
+    #         size = (size,)
+    #     size = ShapeExpr(size)
+
+    # return _ffi_api.alloc_storage(size, virtual_device_index, storage_scope, dtype, pool_info_name)  # type: ignore
 
 
 @args_converter.auto
@@ -90,6 +96,13 @@ def alloc_tensor(
     if isinstance(dtype, str):
         dtype = DataTypeImm(dtype)
     return _ffi_api.alloc_tensor(storage, offset, shape, dtype)  # type: ignore
+
+    # if not isinstance(shape, ShapeExpr):
+    #     if not isinstance(shape, (tuple, list)):
+    #         shape = (shape,)
+    #     shape = ShapeExpr(shape)
+
+    # return _ffi_api.alloc_tensor(storage, shape, offset, dtype)  # type: ignore
 
 
 @args_converter.auto

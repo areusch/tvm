@@ -75,6 +75,17 @@ def CallTIRRewrite() -> tvm.ir.transform.Pass:
     return _ffi_api.CallTIRRewrite()  # type: ignore
 
 
+def AOTMemoryLower() -> tvm.ir.transform.Pass:
+    """Perform memory lowering in AOT. Lowers the relax.builtin.alloc_tensor intrinsic to
+    relax.memory.* intrinsics.
+
+    Returns
+    -------
+    ret: tvm.ir.transform.Pass
+    """
+    return _ffi_api.AOTMemoryLower()  # type: ignore
+
+
 def Normalize() -> tvm.ir.transform.Pass:
     """Transforming Relax IR to normal form, i.e., the expressions are normalized(no nesting
     and hence the AST is in ANF), and all checked_type_ and shape_ of expressions are available.
@@ -724,6 +735,10 @@ def SplitCallTIRByPattern(patterns, fcodegen) -> tvm.ir.transform.Pass:
         The registered pass for splitting call_tir.
     """
     return _ffi_api.SplitCallTIRByPattern(patterns, fcodegen)  # type: ignore
+
+
+def ConvertRelaxMainToDPS(attach_io_to_attrs: bool = True) -> tvm.ir.transform.Pass:
+    return _ffi_api.ConvertRelaxMainToDPS(attach_io_to_attrs)
 
 
 def _wrap_class_function_pass(pass_cls, pass_info):

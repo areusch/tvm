@@ -89,6 +89,7 @@ from . import op
 from . import struct_info
 from . import backend
 from . import frontend
+from . import aot
 
 # VM
 from .vm_build import build, Executable
